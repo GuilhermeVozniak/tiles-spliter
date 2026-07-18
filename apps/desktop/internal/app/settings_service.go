@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
@@ -31,23 +32,30 @@ func (st *SettingsStore) Get() engine.Settings {
 
 func (st *SettingsStore) Set(s engine.Settings) error {
 	st.mu.Lock()
+	defer st.mu.Unlock()
 	st.s = s
-	st.mu.Unlock()
+	// Save under the lock so concurrent Sets can't interleave writes to the
+	// shared settings.json.tmp file.
 	return s.Save(st.path)
 }
 
 // SettingsService is bound to the frontend via Wails.
 type SettingsService struct {
-	store      *SettingsStore
-	dispatcher *Dispatcher
-	app        *application.App
-	prefs      *application.WebviewWindow
-	tray       *application.SystemTray
-	engineOn   bool
+	store          *SettingsStore
+	dispatcher     *Dispatcher
+	app            *application.App
+	prefs          *application.WebviewWindow
+	tray           *application.SystemTray
+	applyHotkeysFn func(engine.Settings) // seam: tests count hotkey re-registration
+
+	engineMu sync.Mutex
+	engineOn bool
 }
 
 func NewSettingsService(store *SettingsStore, d *Dispatcher) *SettingsService {
-	return &SettingsService{store: store, dispatcher: d}
+	s := &SettingsService{store: store, dispatcher: d}
+	s.applyHotkeysFn = s.applyHotkeys
+	return s
 }
 
 func (s *SettingsService) SetApp(a *application.App)                   { s.app = a }
@@ -60,16 +68,26 @@ func (s *SettingsService) ShowPreferences() {
 	s.prefs.Focus()
 }
 
-// StartEngine registers hotkeys and the drag tap. Idempotent.
+// StartEngine registers hotkeys and the drag tap. Idempotent and safe for
+// concurrent callers (frontend AX polling can race the launch path).
 func (s *SettingsService) StartEngine() {
+	s.engineMu.Lock()
 	if s.engineOn {
+		s.engineMu.Unlock()
 		return
 	}
 	s.engineOn = true
-	s.applyHotkeys(s.store.Get())
+	s.engineMu.Unlock()
+	s.applyHotkeysFn(s.store.Get())
 	_ = platform.StartDragTap(func(kind platform.DragEventKind, x, y float64, mod bool) {
 		s.dispatcher.OnDragEvent(int(kind), x, y, mod)
 	})
+}
+
+func (s *SettingsService) engineRunning() bool {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	return s.engineOn
 }
 
 // Hotkey id == index into menuOrder(); undo uses undoHotkeyID.
@@ -136,7 +154,16 @@ func (s *SettingsService) RestoreDefaultHotkeys() engine.Settings {
 	return cur
 }
 
-func (s *SettingsService) AXTrusted() bool { return platform.AXTrusted(false) }
+// AXTrusted reports whether Accessibility permission is granted. The
+// onboarding UI polls this after sending the user to System Settings, so a
+// freshly granted permission also starts the engine — no relaunch needed.
+func (s *SettingsService) AXTrusted() bool {
+	ok := platform.AXTrusted(false)
+	if ok {
+		s.StartEngine()
+	}
+	return ok
+}
 func (s *SettingsService) RequestAXPermission() bool {
 	ok := platform.AXTrusted(true)
 	if ok {
@@ -146,8 +173,11 @@ func (s *SettingsService) RequestAXPermission() bool {
 }
 
 func (s *SettingsService) applySideEffects(old, next engine.Settings) {
-	if s.engineOn {
-		s.applyHotkeys(next)
+	// Only re-register hotkeys when the hotkey config actually changed —
+	// otherwise every settings tick (e.g. a padding slider) churns Carbon
+	// registrations.
+	if s.engineRunning() && !reflect.DeepEqual(old.Hotkeys, next.Hotkeys) {
+		s.applyHotkeysFn(next)
 	}
 	if old.General.LaunchAtLogin != next.General.LaunchAtLogin {
 		_ = platform.SetLoginItem(next.General.LaunchAtLogin)

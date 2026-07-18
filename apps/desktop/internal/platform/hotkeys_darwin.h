@@ -10,6 +10,9 @@ static OSStatus ts_hk_handler(EventHandlerCallRef next, EventRef evt, void *data
 }
 
 static void ts_hk_install(void) {
+  static int installed = 0; // InstallEventHandler must run once; re-installing leaks handlers
+  if (installed) return;
+  installed = 1;
   EventTypeSpec spec = {kEventClassKeyboard, kEventHotKeyPressed};
   InstallEventHandler(GetEventDispatcherTarget(), ts_hk_handler, 1, &spec, NULL, NULL);
 }
