@@ -18,6 +18,14 @@ var assets embed.FS
 //go:embed build/tray-icon.png
 var trayIconBytes []byte
 
+// Tile glyphs for the tray menu, one per layout action. Regenerate after
+// changing cmd/genmenuicons with `go generate .` (output is deterministic and
+// committed).
+//
+//go:generate go run ./cmd/genmenuicons
+//go:embed all:build/menu-icons
+var menuIconsFS embed.FS
+
 var actionLabels = map[engine.Action]string{
 	engine.ActionCenter: "Center", engine.ActionFullscreen: "Fullscreen",
 	engine.ActionHalfLeft: "Half Left", engine.ActionHalfRight: "Half Right",
@@ -28,6 +36,15 @@ var actionLabels = map[engine.Action]string{
 	engine.ActionTwoThirdsLeft: "Two Thirds Left", engine.ActionTwoThirdsRight: "Two Thirds Right",
 	engine.ActionTwoThirdsCenter: "Two Thirds Center",
 	engine.ActionNextDisplay:     "Next Display", engine.ActionPrevDisplay: "Previous Display",
+}
+
+func menuIcon(a engine.Action) []byte {
+	b, err := menuIconsFS.ReadFile("build/menu-icons/" + string(a) + ".png")
+	if err != nil {
+		slog.Warn("missing menu icon", "action", a, "err", err)
+		return nil
+	}
+	return b
 }
 
 func main() {
@@ -81,22 +98,74 @@ func main() {
 
 	// --- Tray ---
 	// API drift: system tray creation lives on the SystemTray manager.
+	// Menu layout mirrors the original Tiles app: sections split by
+	// separators, a tile glyph per action, and shortcut hints that track the
+	// live hotkey bindings.
+	//
+	// SetAccelerator on a menu item is display-only for global firing
+	// purposes: on macOS Wails only sets the NSMenuItem keyEquivalent (see
+	// menuitem_darwin.go setMenuItemKeyEquivalent) — it never touches the
+	// separate GlobalShortcut manager, and a status-item menu is outside the
+	// key-equivalent responder chain. The Carbon hotkeys registered by
+	// internal/platform remain the only global handlers; no double-firing.
 	tray := wailsApp.SystemTray.New()
 	menu := wailsApp.NewMenu()
 	menu.Add("Preferences…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) { svc.ShowPreferences() })
-	menu.AddSeparator()
-	for _, a := range app.MenuOrder() {
-		action := a
-		menu.Add(actionLabels[action]).OnClick(func(*application.Context) { dispatcher.Perform(action) })
+	actionItems := make(map[engine.Action]*application.MenuItem, len(app.MenuOrder()))
+	for _, section := range app.MenuSections() {
+		menu.AddSeparator()
+		for _, a := range section {
+			action := a
+			item := menu.Add(actionLabels[action]).OnClick(func(*application.Context) { dispatcher.Perform(action) })
+			if icon := menuIcon(action); icon != nil {
+				item.SetBitmap(icon)
+			}
+			actionItems[action] = item
+		}
 	}
 	menu.AddSeparator()
-	menu.Add("Undo").OnClick(func(*application.Context) { dispatcher.Undo() })
+	undoItem := menu.Add("Undo").OnClick(func(*application.Context) { dispatcher.Undo() })
 	menu.AddSeparator()
 	menu.Add("About Tiles Spliter").OnClick(func(*application.Context) { svc.ShowPreferences() })
 	menu.Add("Quit Tiles Spliter").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { wailsApp.Quit() })
+
+	// applyMenuAccelerators syncs every action item's accelerator hint with
+	// the current bindings. Items without a binding (or with hotkeys
+	// disabled) show no shortcut. Safe pre-Run (impl is nil, pure Go state);
+	// post-Run it must run on the main thread — see the refresh callback.
+	applyMenuAccelerators := func(cfg engine.Settings) {
+		setHint := func(item *application.MenuItem, a engine.Action) {
+			if hk, ok := cfg.Hotkeys.Bindings[a]; ok && cfg.Hotkeys.Enabled {
+				if acc := app.AcceleratorString(hk); acc != "" {
+					item.SetAccelerator(acc)
+					return
+				}
+			}
+			item.RemoveAccelerator()
+		}
+		for a, item := range actionItems {
+			setHint(item, a)
+		}
+		setHint(undoItem, engine.Action("undo"))
+	}
+	applyMenuAccelerators(store.Get())
+
 	tray.SetMenu(menu)
 	tray.SetTemplateIcon(trayIconBytes)
 	svc.SetTray(tray)
+
+	// Live refresh on remap: applySideEffects fires this whenever the hotkey
+	// config changes. Menu mutation and Menu.Update touch AppKit, so marshal
+	// onto the main thread; InvokeAsync also keeps the settings Update call
+	// from blocking on the UI. RemoveAccelerator only clears Go-side state —
+	// menu.Update() rebuilds every native item from that state (re-applying
+	// bitmaps and accelerators), so stale keyEquivalents are dropped too.
+	svc.SetMenuRefresh(func() {
+		application.InvokeAsync(func() {
+			applyMenuAccelerators(store.Get())
+			menu.Update()
+		})
+	})
 
 	// --- Engine wiring (only once AX permission exists) ---
 	// API drift: application-lifecycle events are subscribed via the Event

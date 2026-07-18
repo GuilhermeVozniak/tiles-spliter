@@ -60,6 +60,10 @@ type SettingsService struct {
 	prefsFactory   func() *application.WebviewWindow // recreates prefs if destroyed
 	tray           *application.SystemTray
 	applyHotkeysFn func(engine.Settings) // seam: tests count hotkey re-registration
+	// menuRefresh rebuilds the tray menu's accelerator hints; wired by main.go
+	// via SetMenuRefresh and invoked whenever the hotkey config changes (the
+	// callback itself marshals onto the main thread).
+	menuRefresh func()
 
 	engineMu sync.Mutex
 	engineOn bool
@@ -99,6 +103,10 @@ func NewSettingsService(store *SettingsStore, d *Dispatcher) *SettingsService {
 func (s *SettingsService) SetApp(a *application.App)                   { s.app = a }
 func (s *SettingsService) SetPrefsWindow(w *application.WebviewWindow) { s.prefs = w }
 func (s *SettingsService) SetTray(t *application.SystemTray)           { s.tray = t }
+
+// SetMenuRefresh wires the tray-menu rebuild callback (accelerator hints must
+// track the live hotkey bindings). Called once from main.go before Run.
+func (s *SettingsService) SetMenuRefresh(f func()) { s.menuRefresh = f }
 
 // SetPrefsFactory wires a constructor used to (re)create the prefs window if
 // it is missing or was destroyed. Wails v3 alpha offers no hide-on-close
@@ -337,8 +345,15 @@ func (s *SettingsService) applySideEffects(old, next engine.Settings) {
 	// Only re-register hotkeys when the hotkey config actually changed —
 	// otherwise every settings tick (e.g. a padding slider) churns Carbon
 	// registrations.
-	if s.engineRunning() && !reflect.DeepEqual(old.Hotkeys, next.Hotkeys) {
-		s.applyHotkeysFn(next)
+	if !reflect.DeepEqual(old.Hotkeys, next.Hotkeys) {
+		if s.engineRunning() {
+			s.applyHotkeysFn(next)
+		}
+		// The tray menu's shortcut hints must follow remaps even before the
+		// engine runs (menu exists regardless of AX permission).
+		if s.menuRefresh != nil {
+			s.menuRefresh()
+		}
 	}
 	if old.General.LaunchAtLogin != next.General.LaunchAtLogin {
 		_ = platform.SetLoginItem(next.General.LaunchAtLogin)

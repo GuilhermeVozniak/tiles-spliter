@@ -87,6 +87,16 @@ export function SetApp(a) {
 }
 
 /**
+ * SetMenuRefresh wires the tray-menu rebuild callback (accelerator hints must
+ * track the live hotkey bindings). Called once from main.go before Run.
+ * @param {any} f
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetMenuRefresh(f) {
+    return $Call.ByID(2838739487, f);
+}
+
+/**
  * SetPrefsFactory wires a constructor used to (re)create the prefs window if
  * it is missing or was destroyed. Wails v3 alpha offers no hide-on-close
  * window option and no IsDestroyed probe (checked against

@@ -54,6 +54,30 @@ func TestApplySideEffectsHotkeyChurn(t *testing.T) {
 	}
 }
 
+// The tray-menu refresh callback must fire exactly when the hotkey config
+// changes — never on unrelated settings ticks — and must not require the
+// engine to be running (the menu exists regardless of AX permission).
+func TestApplySideEffectsMenuRefresh(t *testing.T) {
+	s := &SettingsService{}
+	s.applyHotkeysFn = func(engine.Settings) {}
+	refreshes := 0
+	s.SetMenuRefresh(func() { refreshes++ })
+
+	old := engine.DefaultSettings()
+	next := engine.DefaultSettings()
+	next.General.WindowPadding = 12 // non-hotkey change
+	s.applySideEffects(old, next)
+	if refreshes != 0 {
+		t.Fatalf("menu refreshed %d times on a non-hotkey change", refreshes)
+	}
+
+	next.Hotkeys.Bindings[engine.ActionCenter] = engine.Hotkey{KeyCode: 3, Modifiers: 256}
+	s.applySideEffects(old, next)
+	if refreshes != 1 {
+		t.Fatalf("hotkey remap with engine off must refresh the menu once, got %d", refreshes)
+	}
+}
+
 // Engine off: even a hotkey change must not register anything yet.
 func TestApplySideEffectsEngineOff(t *testing.T) {
 	s := &SettingsService{}
