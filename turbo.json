@@ -10,6 +10,15 @@
     "lint": {},
     "dev": { "cache": false, "persistent": true },
     "@tiles-spliter/web#test": { "dependsOn": ["^build", "build"] },
-    "@tiles-spliter/desktop#test": { "dependsOn": ["build"] }
+    "@tiles-spliter/desktop#build": {
+      "dependsOn": ["^build", "tiles-spliter-desktop-frontend#build"],
+      "outputs": ["bin/**"]
+    },
+    "@tiles-spliter/desktop#test": {
+      "dependsOn": ["tiles-spliter-desktop-frontend#build"]
+    },
+    "@tiles-spliter/desktop#lint": {
+      "dependsOn": ["tiles-spliter-desktop-frontend#build"]
+    }
   }
 }

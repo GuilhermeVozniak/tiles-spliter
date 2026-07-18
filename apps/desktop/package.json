@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "wails3 dev",
-    "build": "(wails3 generate bindings || echo 'wails3 not installed, using committed bindings') && cd frontend && bun run build && cd .. && go build -o bin/tilespliter .",
+    "build": "(wails3 generate bindings || echo 'wails3 not installed, using committed bindings') && go build -o bin/tilespliter .",
     "test": "go test ./...",
     "lint": "go vet ./..."
   }
