@@ -6,6 +6,10 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
+    version: "0.1.2",
+    note: "Styled DMG installer with drag-to-Applications window.",
+  },
+  {
     version: "0.1.1",
     note: "Menu bar parity: tile icons, section separators and live shortcut hints in the tray menu. Plus drag, hotkey and settings reliability fixes.",
   },
