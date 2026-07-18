@@ -54,10 +54,10 @@ type Settings struct {
 }
 
 const (
-	modCmd  = 256
-	modShift = 512
-	modOpt  = 2048
-	modCtrl = 4096
+	modCmd                                   = 256
+	modShift                                 = 512
+	modOpt                                   = 2048
+	modCtrl                                  = 4096
 	keyC, keyF, keyU, keyI, keyJ, keyK, keyY = 8, 3, 32, 34, 38, 40, 16
 	keyLeft, keyRight, keyDown, keyUp        = 123, 124, 125, 126
 )

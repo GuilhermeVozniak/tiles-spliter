@@ -25,4 +25,4 @@ func SetLoginItem(enabled bool) error {
 }
 
 func ActivatePrefs() { C.ts_activate_prefs() }
-func HideFromDock() { C.ts_hide_from_dock() }
+func HideFromDock()  { C.ts_hide_from_dock() }

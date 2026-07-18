@@ -27,7 +27,7 @@ var actionLabels = map[engine.Action]string{
 	engine.ActionNextThird: "Next Third", engine.ActionPrevThird: "Previous Third",
 	engine.ActionTwoThirdsLeft: "Two Thirds Left", engine.ActionTwoThirdsRight: "Two Thirds Right",
 	engine.ActionTwoThirdsCenter: "Two Thirds Center",
-	engine.ActionNextDisplay: "Next Display", engine.ActionPrevDisplay: "Previous Display",
+	engine.ActionNextDisplay:     "Next Display", engine.ActionPrevDisplay: "Previous Display",
 }
 
 func main() {
