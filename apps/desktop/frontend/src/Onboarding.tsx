@@ -6,7 +6,7 @@ type Props = { onGranted: () => void };
 // Shown instead of the tab shell until Accessibility access is granted.
 // Polls axTrusted() every 2s so the UI flips to the shell as soon as the
 // user grants access in System Settings — no restart required, since the
-// Go side already starts the engine inside RequestAXPermission.
+// Go side starts the engine as soon as AXTrusted() observes the grant.
 export function Onboarding({ onGranted }: Props) {
   const [requesting, setRequesting] = useState(false);
 

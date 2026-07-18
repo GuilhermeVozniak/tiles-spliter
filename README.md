@@ -21,6 +21,21 @@ To iterate on the desktop app with hot reload, install the [Wails v3
 CLI](https://v3.wails.io/) and run `wails3 dev` from `apps/desktop` (not
 wired into `bun run dev` — the CLI is not a project dependency).
 
+### Wails bindings
+
+The frontend calls Go through generated bindings in
+`apps/desktop/frontend/bindings/`, which are **committed** so fresh clones
+build without the Wails CLI. After changing any Go method bound to the
+frontend (`SettingsService`), regenerate them:
+
+```bash
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+cd apps/desktop && wails3 generate bindings
+```
+
+The desktop build script runs `wails3 generate bindings` automatically when
+the CLI is installed and falls back to the committed bindings otherwise.
+
 ## Repo layout
 
 ```
