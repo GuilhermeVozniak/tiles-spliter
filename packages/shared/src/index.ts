@@ -28,7 +28,9 @@ export interface Settings {
   };
   hotkeys: {
     enabled: boolean;
-    bindings: Partial<Record<Action, Hotkey>>;
+    // "undo" is a pseudo-action: bindable like the others but not part of
+    // the Action union (it has no window-layout behavior of its own).
+    bindings: Partial<Record<Action, Hotkey>> & { undo?: Hotkey };
   };
   snap: {
     enabled: boolean;
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
       "two-thirds-center": b(KEY.up, MOD.ctrl + MOD.cmd),
       "next-display": b(KEY.right, MOD.cmd + MOD.opt + MOD.ctrl),
       "prev-display": b(KEY.left, MOD.cmd + MOD.opt + MOD.ctrl),
+      undo: b(KEY.Y, MOD.cmd + MOD.opt),
     },
   },
   snap: {

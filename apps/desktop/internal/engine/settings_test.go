@@ -23,8 +23,8 @@ func TestDefaultsMatchSpec(t *testing.T) {
 	if s.Hotkeys.Bindings[ActionCenter] != (Hotkey{KeyCode: 8, Modifiers: 256 + 2048}) {
 		t.Fatal("center hotkey ⌥⌘C")
 	}
-	if len(s.Hotkeys.Bindings) != 17 {
-		t.Fatalf("17 default bindings, got %d", len(s.Hotkeys.Bindings))
+	if len(s.Hotkeys.Bindings) != 18 {
+		t.Fatalf("18 default bindings, got %d", len(s.Hotkeys.Bindings))
 	}
 }
 

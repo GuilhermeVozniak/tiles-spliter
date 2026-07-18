@@ -85,6 +85,9 @@ func DefaultSettings() Settings {
 				ActionTwoThirdsCenter: {keyUp, modCtrl + modCmd},
 				ActionNextDisplay:     {keyRight, modCmd + modOpt + modCtrl},
 				ActionPrevDisplay:     {keyLeft, modCmd + modOpt + modCtrl},
+				// "undo" is a pseudo-action: it has no engine.Action const because
+				// it isn't a window-layout action, only a hotkey-bindable command.
+				Action("undo"): {keyY, modCmd + modOpt},
 			},
 		},
 		Snap: SnapSettings{
