@@ -20,11 +20,13 @@ APP="dist/Tiles Spliter.app"
 if [ "$DRY_RUN" = "1" ]; then
   # Dry run: build arm64 only (fast local verification, no cross-toolchain
   # requirement). The real release build still produces a universal binary.
-  (cd apps/desktop && GOOS=darwin GOARCH=arm64 go build -o ../../dist/tilespliter-arm64 .)
+  (cd apps/desktop && CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o ../../dist/tilespliter-arm64 .)
   cp dist/tilespliter-arm64 dist/tilespliter
 else
-  (cd apps/desktop && GOOS=darwin GOARCH=arm64 go build -o ../../dist/tilespliter-arm64 . \
-    && GOOS=darwin GOARCH=amd64 go build -o ../../dist/tilespliter-amd64 .)
+  # CGO_ENABLED=1 is required explicitly: cgo defaults OFF when GOARCH differs
+  # from the host, which would silently drop the AX/Carbon platform layer.
+  (cd apps/desktop && CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o ../../dist/tilespliter-arm64 . \
+    && CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o ../../dist/tilespliter-amd64 .)
   lipo -create -output dist/tilespliter dist/tilespliter-arm64 dist/tilespliter-amd64
 fi
 

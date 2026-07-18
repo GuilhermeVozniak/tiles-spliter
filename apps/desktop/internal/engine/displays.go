@@ -2,8 +2,8 @@ package engine
 
 import "sort"
 
-// DisplayOf returns the index of the display whose visible frame contains the
-// window's midpoint, falling back to the nearest-by-frame (index 0 last resort).
+// DisplayOf returns the index of the display whose full frame contains the
+// window's midpoint, falling back to index 0 as a last resort.
 func DisplayOf(win Rect, displays []Display) int {
 	mid := win.Mid()
 	for i, d := range displays {

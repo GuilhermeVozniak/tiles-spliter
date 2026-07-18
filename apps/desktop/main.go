@@ -74,6 +74,15 @@ func main() {
 	})
 	svc.SetPrefsWindow(prefs)
 
+	// Closing the prefs window must not destroy it (the app keeps running as a
+	// menu-bar accessory): intercept the close, hide the window instead, and
+	// drop the Dock icon that ActivatePrefs added.
+	prefs.OnWindowEvent(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		e.Cancel()
+		prefs.Hide()
+		platform.HideFromDock()
+	})
+
 	// --- Tray ---
 	// API drift: system tray creation lives on the SystemTray manager.
 	tray := wailsApp.SystemTray.New()
