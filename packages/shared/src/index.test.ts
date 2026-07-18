@@ -5,9 +5,33 @@ import {
   actionLabel,
   CODE_TO_CARBON,
   DEFAULT_SETTINGS,
+  downloadUrl,
+  GITHUB_REPO,
   HOTKEY_DISPLAY,
+  releaseAssetName,
   ZONES,
 } from "./index";
+
+describe("releaseAssetName", () => {
+  it("names the macOS universal DMG", () => {
+    expect(releaseAssetName("1.2.3")).toBe(
+      "tiles-spliter_1.2.3_darwin_universal.dmg",
+    );
+  });
+});
+
+describe("downloadUrl", () => {
+  it("points at the latest release page when no version is given", () => {
+    expect(downloadUrl()).toBe(
+      `https://github.com/${GITHUB_REPO}/releases/latest`,
+    );
+  });
+  it("builds a tagged release asset URL for a given version", () => {
+    expect(downloadUrl("1.2.3")).toBe(
+      `https://github.com/${GITHUB_REPO}/releases/download/v1.2.3/tiles-spliter_1.2.3_darwin_universal.dmg`,
+    );
+  });
+});
 
 describe("shared defaults", () => {
   it("has 17 actions plus none", () => {

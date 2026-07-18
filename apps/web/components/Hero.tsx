@@ -1,5 +1,4 @@
-const RELEASES_URL =
-  "https://github.com/GuilhermeVozniak/tiles-spliter/releases/latest";
+import { downloadUrl } from "@tiles-spliter/shared";
 
 export function Hero() {
   return (
@@ -12,7 +11,7 @@ export function Hero() {
       </p>
       <div className="mt-8 flex flex-col items-center gap-3">
         <a
-          href={RELEASES_URL}
+          href={downloadUrl()}
           target="_blank"
           rel="noreferrer"
           className="rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"

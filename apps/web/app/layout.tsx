@@ -1,3 +1,4 @@
+import { downloadUrl, GITHUB_REPO } from "@tiles-spliter/shared";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
@@ -5,9 +6,7 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
-const RELEASES_URL =
-  "https://github.com/GuilhermeVozniak/tiles-spliter/releases/latest";
-const REPO_URL = "https://github.com/GuilhermeVozniak/tiles-spliter";
+const REPO_URL = `https://github.com/${GITHUB_REPO}`;
 
 export const metadata: Metadata = {
   title: "Tiles Spliter — window manager for macOS",
@@ -62,7 +61,7 @@ export default function RootLayout({
               &copy; {new Date().getFullYear()} Tiles Spliter. Made for macOS.
             </span>
             <a
-              href={RELEASES_URL}
+              href={downloadUrl()}
               target="_blank"
               rel="noreferrer"
               className="hover:text-zinc-300"

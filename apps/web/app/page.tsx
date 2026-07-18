@@ -1,8 +1,6 @@
+import { downloadUrl } from "@tiles-spliter/shared";
 import { Hero } from "@/components/Hero";
 import { HotkeyTable } from "@/components/HotkeyTable";
-
-const RELEASES_URL =
-  "https://github.com/GuilhermeVozniak/tiles-spliter/releases/latest";
 
 const FEATURES = [
   {
@@ -60,7 +58,7 @@ export default function Home() {
       <section className="mx-auto flex max-w-5xl flex-col items-center px-6 py-20">
         <h2 className="text-2xl font-semibold text-zinc-100">Ready to tile?</h2>
         <a
-          href={RELEASES_URL}
+          href={downloadUrl()}
           target="_blank"
           rel="noreferrer"
           className="mt-6 rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"

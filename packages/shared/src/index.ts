@@ -1,3 +1,22 @@
+// Release-asset contract shared by the landing page and the release
+// workflow (scripts/release.sh / .github/workflows/release.yml). Keep the
+// name/extension here in lockstep with the DMG_NAME produced by
+// scripts/release.sh.
+export const GITHUB_REPO = "GuilhermeVozniak/tiles-spliter";
+
+export function releaseAssetName(version: string): string {
+  return `tiles-spliter_${version}_darwin_universal.dmg`;
+}
+
+// No version → latest release page (GitHub redirects to the newest tag).
+// A version → the direct download URL for that tag's DMG asset.
+export function downloadUrl(version?: string): string {
+  if (!version) {
+    return `https://github.com/${GITHUB_REPO}/releases/latest`;
+  }
+  return `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${releaseAssetName(version)}`;
+}
+
 export const ACTIONS = [
   "center",
   "fullscreen",
