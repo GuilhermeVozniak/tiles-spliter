@@ -67,3 +67,60 @@ func TestApplySideEffectsEngineOff(t *testing.T) {
 		t.Fatalf("engine off: applyHotkeys called %d times", calls)
 	}
 }
+
+// SuspendHotkeys marks registration suspended; ResumeHotkeys clears it and,
+// with the engine running, re-applies hotkeys exactly once via the
+// applyHotkeysFn seam (so this doesn't touch real Carbon registration).
+func TestSuspendResumeHotkeys(t *testing.T) {
+	s := &SettingsService{
+		engineOn: true,
+		store:    &SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")},
+	}
+	calls := 0
+	s.applyHotkeysFn = func(engine.Settings) { calls++ }
+
+	s.SuspendHotkeys()
+	if !s.hotkeysSuspended {
+		t.Fatal("SuspendHotkeys must set the suspended flag")
+	}
+	if calls != 0 {
+		t.Fatalf("SuspendHotkeys must not re-apply hotkeys, got %d calls", calls)
+	}
+
+	s.ResumeHotkeys()
+	if s.hotkeysSuspended {
+		t.Fatal("ResumeHotkeys must clear the suspended flag")
+	}
+	if calls != 1 {
+		t.Fatalf("ResumeHotkeys with engine running must re-apply hotkeys once, got %d", calls)
+	}
+}
+
+// With the engine not yet running, ResumeHotkeys must clear the flag but not
+// trigger registration — StartEngine will apply hotkeys itself on launch.
+func TestResumeHotkeysNoopWhenEngineOff(t *testing.T) {
+	s := &SettingsService{
+		store: &SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")},
+	}
+	calls := 0
+	s.applyHotkeysFn = func(engine.Settings) { calls++ }
+
+	s.SuspendHotkeys()
+	s.ResumeHotkeys()
+	if s.hotkeysSuspended {
+		t.Fatal("ResumeHotkeys must clear the suspended flag even when engine is off")
+	}
+	if calls != 0 {
+		t.Fatalf("ResumeHotkeys with engine off must not re-apply hotkeys, got %d", calls)
+	}
+}
+
+// applyHotkeys itself (not just the seam) must honor the suspended flag: it
+// unregisters (idempotent/no-op with nothing registered) but must not
+// install the Carbon handler or attempt registration while suspended.
+func TestApplyHotkeysSkipsWhenSuspended(t *testing.T) {
+	s := NewSettingsService(&SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")}, nil)
+	s.hotkeysSuspended = true
+	// Must return promptly without panicking or blocking on Carbon calls.
+	s.applyHotkeys(engine.DefaultSettings())
+}

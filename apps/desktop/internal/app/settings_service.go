@@ -67,6 +67,12 @@ type SettingsService struct {
 	// applyHotkeys so concurrent StartEngine/Update callers can't interleave
 	// and leave a partial hotkey set registered.
 	hotkeysMu sync.Mutex
+	// hotkeysSuspended is set while the Hotkeys tab is recording a new combo:
+	// with global hotkeys unregistered, Carbon no longer intercepts the
+	// keydown, so an already-bound combo can be captured in the webview.
+	// Guarded by hotkeysMu; checked inside applyHotkeys so every caller of
+	// applyHotkeysFn (StartEngine, applySideEffects, ResumeHotkeys) honors it.
+	hotkeysSuspended bool
 	// updateMu serializes Swap+applySideEffects in Update so concurrent
 	// updates always see consecutive (old, next) pairs — side effects can't
 	// be applied against a stale old snapshot.
@@ -171,7 +177,7 @@ func (s *SettingsService) applyHotkeys(cfg engine.Settings) {
 	s.hotkeysMu.Lock()
 	defer s.hotkeysMu.Unlock()
 	platform.UnregisterAllHotkeys()
-	if !cfg.Hotkeys.Enabled {
+	if s.hotkeysSuspended || !cfg.Hotkeys.Enabled {
 		return
 	}
 	platform.InstallHotkeyHandler(func(id uint32) {
@@ -198,6 +204,30 @@ func (s *SettingsService) applyHotkeys(cfg engine.Settings) {
 		if err := platform.RegisterHotkey(undoHotkeyID, hk); err != nil {
 			slog.Warn("hotkey registration failed", "action", "undo", "err", err)
 		}
+	}
+}
+
+// SuspendHotkeys unregisters all global hotkeys and marks registration
+// suspended, so StartEngine/applySideEffects skip re-registering until
+// ResumeHotkeys is called. Used by the Hotkeys tab while recording a new
+// combo: Carbon otherwise intercepts the keydown before it reaches the
+// webview, making already-bound combos impossible to capture. Safe to call
+// even if the engine isn't running yet.
+func (s *SettingsService) SuspendHotkeys() {
+	s.hotkeysMu.Lock()
+	defer s.hotkeysMu.Unlock()
+	platform.UnregisterAllHotkeys()
+	s.hotkeysSuspended = true
+}
+
+// ResumeHotkeys clears the suspend flag and, if the engine is running,
+// re-registers hotkeys from the current settings.
+func (s *SettingsService) ResumeHotkeys() {
+	s.hotkeysMu.Lock()
+	s.hotkeysSuspended = false
+	s.hotkeysMu.Unlock()
+	if s.engineRunning() {
+		s.applyHotkeysFn(s.store.Get())
 	}
 }
 

@@ -38,6 +38,18 @@ export function Get() {
 }
 
 /**
+ * ReconcileStartup re-applies settings whose state lives outside the process
+ * (login item registration, tray visibility), so a settings file edited while
+ * the app wasn't running — or drift in the login-item database — is corrected
+ * at launch. Called from ApplicationDidFinishLaunching regardless of AX
+ * permission.
+ * @returns {$CancellablePromise<void>}
+ */
+export function ReconcileStartup() {
+    return $Call.ByID(2878858104);
+}
+
+/**
  * @returns {$CancellablePromise<boolean>}
  */
 export function RequestAXPermission() {
@@ -54,11 +66,33 @@ export function RestoreDefaultHotkeys() {
 }
 
 /**
+ * ResumeHotkeys clears the suspend flag and, if the engine is running,
+ * re-registers hotkeys from the current settings.
+ * @returns {$CancellablePromise<void>}
+ */
+export function ResumeHotkeys() {
+    return $Call.ByID(1740633685);
+}
+
+/**
  * @param {application$0.App | null} a
  * @returns {$CancellablePromise<void>}
  */
 export function SetApp(a) {
     return $Call.ByID(1064341430, a);
+}
+
+/**
+ * SetPrefsFactory wires a constructor used to (re)create the prefs window if
+ * it is missing or was destroyed. Wails v3 alpha offers no hide-on-close
+ * window option and no IsDestroyed probe (checked against
+ * WebviewWindowOptions / WebviewWindow docs), so main.go cancels the close
+ * event and hides instead — this factory is the defensive fallback.
+ * @param {any} f
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetPrefsFactory(f) {
+    return $Call.ByID(3575272595, f);
 }
 
 /**
@@ -85,12 +119,29 @@ export function ShowPreferences() {
 }
 
 /**
- * StartEngine registers hotkeys and the drag tap. Idempotent and safe for
- * concurrent callers (frontend AX polling can race the launch path).
+ * StartEngine registers hotkeys first, then the drag tap. Idempotent and safe
+ * for concurrent callers (frontend AX polling can race the launch path).
+ * engineOn latches only on full success: if StartDragTap fails, hotkeys stay
+ * registered but engineOn remains false so the next AXTrusted poll retries.
+ * A retry re-runs applyHotkeys, which is idempotent under hotkeysMu — it
+ * starts by unregistering everything — so partial-hotkeys-then-retry is safe.
  * @returns {$CancellablePromise<void>}
  */
 export function StartEngine() {
     return $Call.ByID(1368330785);
+}
+
+/**
+ * SuspendHotkeys unregisters all global hotkeys and marks registration
+ * suspended, so StartEngine/applySideEffects skip re-registering until
+ * ResumeHotkeys is called. Used by the Hotkeys tab while recording a new
+ * combo: Carbon otherwise intercepts the keydown before it reaches the
+ * webview, making already-bound combos impossible to capture. Safe to call
+ * even if the engine isn't running yet.
+ * @returns {$CancellablePromise<void>}
+ */
+export function SuspendHotkeys() {
+    return $Call.ByID(2284339606);
 }
 
 /**
