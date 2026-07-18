@@ -4,6 +4,7 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "out/**", "bin/**"] },
     "test": { "dependsOn": ["^build"] },
     "lint": {},
-    "dev": { "cache": false, "persistent": true }
+    "dev": { "cache": false, "persistent": true },
+    "@tiles-spliter/web#test": { "dependsOn": ["^build", "build"] }
   }
 }

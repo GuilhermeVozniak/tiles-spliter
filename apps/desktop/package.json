@@ -1,0 +1,10 @@
+{
+  "name": "@tiles-spliter/desktop",
+  "private": true,
+  "scripts": {
+    "dev": "wails3 dev",
+    "build": "cd frontend && bun run build && cd .. && go build -o bin/tilespliter .",
+    "test": "go test ./...",
+    "lint": "go vet ./..."
+  }
+}
