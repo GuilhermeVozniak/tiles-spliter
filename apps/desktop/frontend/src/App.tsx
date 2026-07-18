@@ -29,7 +29,7 @@ function Spinner() {
 }
 
 export function App() {
-  const { settings, patch } = useSettings();
+  const { settings, patch, replaceLocal } = useSettings();
   const [active, setActive] = useState<TabID>("general");
   // null = still checking, so we don't flash the onboarding card while the
   // very first axTrusted() call is in flight.
@@ -84,7 +84,11 @@ export function App() {
       </nav>
       <main className="flex-1 overflow-y-auto py-6">
         {settings ? (
-          <ActiveComponent settings={settings} patch={patch} />
+          <ActiveComponent
+            settings={settings}
+            patch={patch}
+            replaceLocal={replaceLocal}
+          />
         ) : (
           <Spinner />
         )}

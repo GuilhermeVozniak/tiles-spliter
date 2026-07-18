@@ -3,6 +3,7 @@ import type { Settings } from "@tiles-spliter/shared";
 type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
+  replaceLocal: (u: (s: Settings) => Settings) => void;
 };
 
 // Single source of truth for the displayed version. Kept as a local constant

@@ -1,39 +1,12 @@
 import type { Action, Settings, ZoneID } from "@tiles-spliter/shared";
 import { ACTION_LABELS, ACTIONS, ZONES } from "@tiles-spliter/shared";
+import { Toggle } from "../components/Toggle";
 
 type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
+  replaceLocal: (u: (s: Settings) => Settings) => void;
 };
-
-function Toggle({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start justify-between gap-4 py-3">
-      <span>
-        <span className="block text-sm font-medium">{label}</span>
-        {hint && <span className="block text-xs text-zinc-400">{hint}</span>}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-5 w-9 accent-indigo-500"
-        role="switch"
-        aria-checked={checked}
-      />
-    </label>
-  );
-}
 
 const ZONE_POS: Record<ZoneID, string> = {
   "top-left": "left-2 top-2",

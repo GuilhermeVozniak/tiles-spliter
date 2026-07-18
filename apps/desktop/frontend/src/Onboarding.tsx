@@ -80,9 +80,8 @@ export function Onboarding({ onGranted }: Props) {
           </button>
         )}
         <p className="mt-4 text-xs text-zinc-500">
-          System Settings → Privacy &amp; Security → Accessibility, then
-          toggle Tiles Spliter on. Once granted, this window switches
-          automatically.
+          System Settings → Privacy &amp; Security → Accessibility, then toggle
+          Tiles Spliter on. Once granted, this window switches automatically.
         </p>
       </div>
     </div>

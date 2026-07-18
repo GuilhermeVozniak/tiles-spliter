@@ -1,43 +1,18 @@
 import type { Settings } from "@tiles-spliter/shared";
+import { Toggle } from "../components/Toggle";
 
 type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
+  replaceLocal: (u: (s: Settings) => Settings) => void;
 };
-
-function Toggle({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start justify-between gap-4 py-3">
-      <span>
-        <span className="block text-sm font-medium">{label}</span>
-        {hint && <span className="block text-xs text-zinc-400">{hint}</span>}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-5 w-9 accent-indigo-500"
-        role="switch"
-        aria-checked={checked}
-      />
-    </label>
-  );
-}
 
 export function GeneralTab({ settings, patch }: Props) {
   const g = settings.general;
-  const set = (k: keyof Settings["general"], v: boolean | number) =>
-    patch((s) => ({ ...s, general: { ...s.general, [k]: v } }));
+  const set = <K extends keyof Settings["general"]>(
+    k: K,
+    v: Settings["general"][K],
+  ) => patch((s) => ({ ...s, general: { ...s.general, [k]: v } }));
   return (
     <div className="divide-y divide-zinc-800 px-6">
       <Toggle

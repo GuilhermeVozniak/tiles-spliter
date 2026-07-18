@@ -6,12 +6,14 @@ import {
   type Settings,
 } from "@tiles-spliter/shared";
 import { useCallback, useEffect, useState } from "react";
-import { restoreDefaultHotkeys } from "../api";
+import { restoreDefaultHotkeys, resumeHotkeys, suspendHotkeys } from "../api";
+import { Toggle } from "../components/Toggle";
 import { keyEventToHotkey } from "../hotkeyCapture";
 
 type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
+  replaceLocal: (u: (s: Settings) => Settings) => void;
 };
 
 type BindingKey = Action | "undo";
@@ -98,7 +100,7 @@ function HotkeyButton({
   );
 }
 
-export function HotkeysTab({ settings, patch }: Props) {
+export function HotkeysTab({ settings, patch, replaceLocal }: Props) {
   const [recording, setRecording] = useState<BindingKey | null>(null);
   const [conflict, setConflict] = useState<BindingKey | null>(null);
   const bindings = settings.hotkeys.bindings;
@@ -108,8 +110,24 @@ export function HotkeysTab({ settings, patch }: Props) {
     setConflict(null);
   }, []);
 
+  // Global hotkeys must be unregistered while recording — otherwise Carbon
+  // intercepts the keydown before it reaches the webview, making an
+  // already-bound combo impossible to capture. The effect cleanup is the
+  // single place resumeHotkeys() runs, so it covers every way recording can
+  // end: capture success, Escape, Backspace (all via stopRecording below),
+  // window blur (also routed through stopRecording), and unmount.
   useEffect(() => {
     if (!recording) return;
+    suspendHotkeys().catch(console.error);
+    return () => {
+      resumeHotkeys().catch(console.error);
+    };
+  }, [recording]);
+
+  useEffect(() => {
+    if (!recording) return;
+
+    const onBlur = () => stopRecording();
 
     const onKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -150,7 +168,11 @@ export function HotkeysTab({ settings, patch }: Props) {
     };
 
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("blur", onBlur);
+    };
   }, [recording, bindings, patch, stopRecording]);
 
   const left = ORDER.slice(0, 9);
@@ -193,27 +215,21 @@ export function HotkeysTab({ settings, patch }: Props) {
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-4">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            role="switch"
-            aria-checked={settings.hotkeys.enabled}
-            checked={settings.hotkeys.enabled}
-            onChange={(e) =>
-              patch((s) => ({
-                ...s,
-                hotkeys: { ...s.hotkeys, enabled: e.target.checked },
-              }))
-            }
-            className="h-5 w-9 accent-indigo-500"
-          />
-          <span className="text-sm font-medium">Enable Hotkeys</span>
-        </label>
+        <Toggle
+          label="Enable Hotkeys"
+          checked={settings.hotkeys.enabled}
+          onChange={(v) =>
+            patch((s) => ({ ...s, hotkeys: { ...s.hotkeys, enabled: v } }))
+          }
+        />
         <button
           type="button"
           onClick={async () => {
             const restored = await restoreDefaultHotkeys();
-            patch(() => restored);
+            // Go already persisted the restored hotkeys; merge just that
+            // section into local state so we don't clobber other in-flight
+            // edits (general/snap) with a second, redundant persist.
+            replaceLocal((s) => ({ ...s, hotkeys: restored.hotkeys }));
           }}
           className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800"
         >

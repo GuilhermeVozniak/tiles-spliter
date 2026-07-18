@@ -10,6 +10,8 @@ type Api = {
   restoreDefaultHotkeys: () => Promise<Settings>;
   axTrusted: () => Promise<boolean>;
   requestAXPermission: () => Promise<boolean>;
+  suspendHotkeys: () => Promise<void>;
+  resumeHotkeys: () => Promise<void>;
 };
 
 let override: Partial<Api> | null = null;
@@ -41,3 +43,13 @@ export const requestAXPermission: Api["requestAXPermission"] = async () =>
   override?.requestAXPermission
     ? override.requestAXPermission()
     : SettingsService.RequestAXPermission();
+
+export const suspendHotkeys: Api["suspendHotkeys"] = async () => {
+  if (override?.suspendHotkeys) return override.suspendHotkeys();
+  await SettingsService.SuspendHotkeys();
+};
+
+export const resumeHotkeys: Api["resumeHotkeys"] = async () => {
+  if (override?.resumeHotkeys) return override.resumeHotkeys();
+  await SettingsService.ResumeHotkeys();
+};
