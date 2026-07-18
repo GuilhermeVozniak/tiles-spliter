@@ -41,5 +41,13 @@ func main() {
 		d := platform.Displays()[engine.DisplayOf(f, platform.Displays())]
 		target, _ := engine.FrameFor(engine.ActionHalfLeft, f, d, 0, false)
 		fmt.Println("setting frame:", target, "err:", w.SetFrame(target))
+	case "hotkeys":
+		platform.InstallHotkeyHandler(func(id uint32) { fmt.Println("hotkey fired:", id) })
+		if err := platform.RegisterHotkey(1, engine.Hotkey{KeyCode: 8, Modifiers: 2048 + 256}); err != nil { // ⌥⌘C
+			fmt.Println("register:", err)
+			return
+		}
+		fmt.Println("press ⌥⌘C (ctrl-c to quit)")
+		platform.RunLoop()
 	}
 }
