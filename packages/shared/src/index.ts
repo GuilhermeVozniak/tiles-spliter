@@ -1,22 +1,41 @@
 export const ACTIONS = [
-  "center", "fullscreen",
-  "half-left", "half-right", "half-top", "half-bottom",
-  "upper-left", "upper-right", "lower-left", "lower-right",
-  "next-third", "prev-third",
-  "two-thirds-left", "two-thirds-right", "two-thirds-center",
-  "next-display", "prev-display",
+  "center",
+  "fullscreen",
+  "half-left",
+  "half-right",
+  "half-top",
+  "half-bottom",
+  "upper-left",
+  "upper-right",
+  "lower-left",
+  "lower-right",
+  "next-third",
+  "prev-third",
+  "two-thirds-left",
+  "two-thirds-right",
+  "two-thirds-center",
+  "next-display",
+  "prev-display",
   "none",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export const ZONES = [
-  "top-left", "top", "top-right",
-  "left", "right",
-  "bottom-left", "bottom", "bottom-right",
+  "top-left",
+  "top",
+  "top-right",
+  "left",
+  "right",
+  "bottom-left",
+  "bottom",
+  "bottom-right",
 ] as const;
 export type ZoneID = (typeof ZONES)[number];
 
-export interface Hotkey { keyCode: number; modifiers: number }
+export interface Hotkey {
+  keyCode: number;
+  modifiers: number;
+}
 
 export interface Settings {
   general: {
@@ -44,14 +63,32 @@ export interface Settings {
 // Carbon modifier masks / virtual key codes
 export const MOD = { cmd: 256, shift: 512, opt: 2048, ctrl: 4096 } as const;
 export const KEY = {
-  C: 8, F: 3, U: 32, I: 34, J: 38, K: 40, Y: 16,
-  left: 123, right: 124, down: 125, up: 126,
+  C: 8,
+  F: 3,
+  U: 32,
+  I: 34,
+  J: 38,
+  K: 40,
+  Y: 16,
+  left: 123,
+  right: 124,
+  down: 125,
+  up: 126,
 } as const;
 
-const b = (keyCode: number, modifiers: number): Hotkey => ({ keyCode, modifiers });
+const b = (keyCode: number, modifiers: number): Hotkey => ({
+  keyCode,
+  modifiers,
+});
 
 export const DEFAULT_SETTINGS: Settings = {
-  general: { launchAtLogin: true, showMenuBarIcon: true, enableAnimations: true, windowPadding: 0, padFullscreen: false },
+  general: {
+    launchAtLogin: true,
+    showMenuBarIcon: true,
+    enableAnimations: true,
+    windowPadding: 0,
+    padFullscreen: false,
+  },
   hotkeys: {
     enabled: true,
     bindings: {
@@ -79,9 +116,14 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: true,
     restorePreviousSize: true,
     zones: {
-      "top-left": "upper-left", top: "fullscreen", "top-right": "upper-right",
-      left: "half-left", right: "half-right",
-      "bottom-left": "lower-left", bottom: "none", "bottom-right": "lower-right",
+      "top-left": "upper-left",
+      top: "fullscreen",
+      "top-right": "upper-right",
+      left: "half-left",
+      right: "half-right",
+      "bottom-left": "lower-left",
+      bottom: "none",
+      "bottom-right": "lower-right",
     },
     zoneThickness: 10,
     activationDelayMs: 0,
@@ -89,18 +131,38 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const ACTION_LABELS: Record<Action, string> = {
-  center: "Center", fullscreen: "Fullscreen",
-  "half-left": "Half Left", "half-right": "Half Right", "half-top": "Half Top", "half-bottom": "Half Bottom",
-  "upper-left": "Upper Left", "upper-right": "Upper Right", "lower-left": "Lower Left", "lower-right": "Lower Right",
-  "next-third": "Next Third", "prev-third": "Previous Third",
-  "two-thirds-left": "Two Thirds Left", "two-thirds-right": "Two Thirds Right", "two-thirds-center": "Two Thirds Center",
-  "next-display": "Next Display", "prev-display": "Previous Display",
+  center: "Center",
+  fullscreen: "Fullscreen",
+  "half-left": "Half Left",
+  "half-right": "Half Right",
+  "half-top": "Half Top",
+  "half-bottom": "Half Bottom",
+  "upper-left": "Upper Left",
+  "upper-right": "Upper Right",
+  "lower-left": "Lower Left",
+  "lower-right": "Lower Right",
+  "next-third": "Next Third",
+  "prev-third": "Previous Third",
+  "two-thirds-left": "Two Thirds Left",
+  "two-thirds-right": "Two Thirds Right",
+  "two-thirds-center": "Two Thirds Center",
+  "next-display": "Next Display",
+  "prev-display": "Previous Display",
   none: "—",
 };
 
 const KEY_NAMES: Record<number, string> = {
-  8: "C", 3: "F", 32: "U", 34: "I", 38: "J", 40: "K", 16: "Y",
-  123: "←", 124: "→", 125: "↓", 126: "↑",
+  8: "C",
+  3: "F",
+  32: "U",
+  34: "I",
+  38: "J",
+  40: "K",
+  16: "Y",
+  123: "←",
+  124: "→",
+  125: "↓",
+  126: "↑",
 };
 
 export function HOTKEY_DISPLAY(hk: Hotkey): string {

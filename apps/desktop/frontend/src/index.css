@@ -5,5 +5,8 @@
 }
 
 body {
-  @apply select-none bg-zinc-950 text-zinc-100 antialiased;
+  user-select: none;
+  background-color: #09090b;
+  color: #f4f4f5;
+  -webkit-font-smoothing: antialiased;
 }

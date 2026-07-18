@@ -46,7 +46,9 @@ export const getSettings: Api["getSettings"] = async () =>
   override?.getSettings ? override.getSettings() : (await bindings()).Get();
 
 export const updateSettings: Api["updateSettings"] = async (s) =>
-  override?.updateSettings ? override.updateSettings(s) : (await bindings()).Update(s);
+  override?.updateSettings
+    ? override.updateSettings(s)
+    : (await bindings()).Update(s);
 
 export const restoreDefaultHotkeys: Api["restoreDefaultHotkeys"] = async () =>
   override?.restoreDefaultHotkeys

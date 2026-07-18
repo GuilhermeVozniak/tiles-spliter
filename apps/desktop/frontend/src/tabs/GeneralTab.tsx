@@ -1,6 +1,9 @@
 import type { Settings } from "@tiles-spliter/shared";
 
-type Props = { settings: Settings; patch: (u: (s: Settings) => Settings) => void };
+type Props = {
+  settings: Settings;
+  patch: (u: (s: Settings) => Settings) => void;
+};
 
 function Toggle({
   label,
@@ -25,6 +28,7 @@ function Toggle({
         onChange={(e) => onChange(e.target.checked)}
         className="h-5 w-9 accent-indigo-500"
         role="switch"
+        aria-checked={checked}
       />
     </label>
   );
@@ -56,7 +60,9 @@ export function GeneralTab({ settings, patch }: Props) {
       <div className="py-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Windows padding</span>
-          <span className="text-xs tabular-nums text-zinc-400">{g.windowPadding} pt</span>
+          <span className="text-xs tabular-nums text-zinc-400">
+            {g.windowPadding} pt
+          </span>
         </div>
         <input
           type="range"

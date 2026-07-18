@@ -1,7 +1,10 @@
 import type { Action, Settings, ZoneID } from "@tiles-spliter/shared";
 import { ACTION_LABELS, ACTIONS, ZONES } from "@tiles-spliter/shared";
 
-type Props = { settings: Settings; patch: (u: (s: Settings) => Settings) => void };
+type Props = {
+  settings: Settings;
+  patch: (u: (s: Settings) => Settings) => void;
+};
 
 function Toggle({
   label,
@@ -26,6 +29,7 @@ function Toggle({
         onChange={(e) => onChange(e.target.checked)}
         className="h-5 w-9 accent-indigo-500"
         role="switch"
+        aria-checked={checked}
       />
     </label>
   );
@@ -45,11 +49,16 @@ const ZONE_POS: Record<ZoneID, string> = {
 export function SnapTab({ settings, patch }: Props) {
   const { snap } = settings;
 
-  const setSnap = <K extends keyof Settings["snap"]>(k: K, v: Settings["snap"][K]) =>
-    patch((s) => ({ ...s, snap: { ...s.snap, [k]: v } }));
+  const setSnap = <K extends keyof Settings["snap"]>(
+    k: K,
+    v: Settings["snap"][K],
+  ) => patch((s) => ({ ...s, snap: { ...s.snap, [k]: v } }));
 
   const setZone = (zone: ZoneID, action: Action) =>
-    patch((s) => ({ ...s, snap: { ...s.snap, zones: { ...s.snap.zones, [zone]: action } } }));
+    patch((s) => ({
+      ...s,
+      snap: { ...s.snap, zones: { ...s.snap.zones, [zone]: action } },
+    }));
 
   return (
     <div className="px-6">
@@ -88,15 +97,17 @@ export function SnapTab({ settings, patch }: Props) {
             </div>
           </div>
           <p className="mt-3 text-center text-xs text-zinc-400">
-            Hold ⌥ ALT or ⌘ CMD while dragging a window to the left or right edge to snap it to
-            thirds.
+            Hold ⌥ ALT or ⌘ CMD while dragging a window to the left or right
+            edge to snap it to thirds.
           </p>
         </div>
 
         <div className="py-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Snap zone thickness</span>
-            <span className="text-xs tabular-nums text-zinc-400">{snap.zoneThickness} pt</span>
+            <span className="text-xs tabular-nums text-zinc-400">
+              {snap.zoneThickness} pt
+            </span>
           </div>
           <input
             type="range"
@@ -112,7 +123,9 @@ export function SnapTab({ settings, patch }: Props) {
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Delay before activation</span>
             <span className="text-xs tabular-nums text-zinc-400">
-              {snap.activationDelayMs === 0 ? "None" : `${snap.activationDelayMs} ms`}
+              {snap.activationDelayMs === 0
+                ? "None"
+                : `${snap.activationDelayMs} ms`}
             </span>
           </div>
           <input
@@ -121,7 +134,9 @@ export function SnapTab({ settings, patch }: Props) {
             max={1000}
             step={50}
             value={snap.activationDelayMs}
-            onChange={(e) => setSnap("activationDelayMs", Number(e.target.value))}
+            onChange={(e) =>
+              setSnap("activationDelayMs", Number(e.target.value))
+            }
             className="mt-2 w-full accent-indigo-500"
           />
         </div>
