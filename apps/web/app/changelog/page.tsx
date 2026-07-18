@@ -4,7 +4,13 @@ export const metadata: Metadata = {
   title: "Changelog — Tiles Spliter",
 };
 
-const RELEASES = [{ version: "0.1.0", note: "Initial release." }];
+const RELEASES = [
+  {
+    version: "0.1.1",
+    note: "Menu bar parity: tile icons, section separators and live shortcut hints in the tray menu. Plus drag, hotkey and settings reliability fixes.",
+  },
+  { version: "0.1.0", note: "Initial release." },
+];
 
 export default function ChangelogPage() {
   return (
