@@ -47,9 +47,15 @@ func (c *SnapController) DragStart(w DragWindow) (Rect, bool) {
 	}
 	c.dragging, c.win, c.zone, c.armed = true, w, "", false
 	if rec, ok := c.history[w.ID]; ok {
-		delete(c.history, w.ID)
-		if s.Snap.RestorePreviousSize && w.Frame.Eq(rec.snapped, 2.0) {
-			return Rect{W: rec.original.W, H: rec.original.H}, true
+		if w.Frame.Eq(rec.snapped, 2.0) {
+			if s.Snap.RestorePreviousSize {
+				delete(c.history, w.ID)
+				return Rect{W: rec.original.W, H: rec.original.H}, true
+			}
+			// Still snapped but restore is disabled: keep the record so
+			// re-enabling the setting can still restore this window.
+		} else {
+			delete(c.history, w.ID) // window moved since snap; record is stale
 		}
 	}
 	return Rect{}, false

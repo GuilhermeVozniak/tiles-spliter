@@ -123,3 +123,24 @@ func TestSnapDisabledGloballyIgnoresEverything(t *testing.T) {
 		t.Fatal("disabled snap shows nothing")
 	}
 }
+
+func TestRestoreRecordSurvivesDisabledSetting(t *testing.T) {
+	f := &fakePlat{}
+	s := DefaultSettings()
+	c := NewSnapController(f, func() Settings { return s }, func() []Display { return []Display{disp} })
+	orig := Rect{100, 100, 400, 300}
+	c.DragStart(DragWindow{ID: 7, Frame: orig})
+	c.DragMove(Point{5, 450}, false)
+	_, snapped, _ := c.DragEnd(Point{5, 450}, false)
+	// Drag the still-snapped window with restore disabled: no restore, record kept.
+	s.Snap.RestorePreviousSize = false
+	if _, ok := c.DragStart(DragWindow{ID: 7, Frame: snapped}); ok {
+		t.Fatal("no restore while setting is off")
+	}
+	// Re-enable: the record must still be there.
+	s.Snap.RestorePreviousSize = true
+	restore, ok := c.DragStart(DragWindow{ID: 7, Frame: snapped})
+	if !ok || restore.W != orig.W || restore.H != orig.H {
+		t.Fatalf("record must survive a disabled-setting drag, got %+v %v", restore, ok)
+	}
+}
