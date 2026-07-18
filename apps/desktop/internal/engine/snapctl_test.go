@@ -3,9 +3,9 @@ package engine
 import "testing"
 
 type fakePlat struct {
-	now      int64
-	shown    []Rect
-	hidden   int
+	now    int64
+	shown  []Rect
+	hidden int
 }
 
 func (f *fakePlat) ShowOverlay(r Rect) { f.shown = append(f.shown, r) }
@@ -93,6 +93,71 @@ func TestDisabledZoneDoesNothing(t *testing.T) {
 	c.DragMove(Point{720, 897}, false) // bottom zone: default "none"
 	if len(f.shown) != 0 {
 		t.Fatal("disabled zone shows no overlay")
+	}
+}
+
+func TestDropWithoutArmingDoesNothing(t *testing.T) {
+	f := &fakePlat{}
+	c := newCtl(f, nil)
+	c.DragStart(DragWindow{ID: 1, Frame: Rect{100, 100, 400, 300}})
+	// Drop straight into a zone without ever arming via DragMove.
+	if _, _, apply := c.DragEnd(Point{5, 450}, false); apply {
+		t.Fatal("unarmed drop must not apply a snap")
+	}
+}
+
+func TestZoneAssignedNextThirdCycles(t *testing.T) {
+	f := &fakePlat{}
+	c := newCtl(f, func(s *Settings) { s.Snap.Zones[ZoneLeft] = ActionNextThird })
+	c.DragStart(DragWindow{ID: 1, Frame: Rect{100, 100, 400, 300}})
+	c.DragMove(Point{5, 450}, false)
+	_, frame, apply := c.DragEnd(Point{5, 450}, false)
+	if !apply {
+		t.Fatal("next-third zone applies")
+	}
+	eq(t, frame, ThirdColumn(0, disp, 0))
+}
+
+func TestZoneAssignedNextDisplayMapsAcrossDisplays(t *testing.T) {
+	f := &fakePlat{}
+	s := DefaultSettings()
+	s.Snap.Zones[ZoneRight] = ActionNextDisplay
+	c := NewSnapController(f, func() Settings { return s }, func() []Display { return two })
+	win := Rect{100, 100, 400, 300}
+	c.DragStart(DragWindow{ID: 1, Frame: win})
+	c.DragMove(Point{1435, 450}, false)
+	_, frame, apply := c.DragEnd(Point{1435, 450}, false)
+	if !apply {
+		t.Fatal("next-display zone applies")
+	}
+	eq(t, frame, MapToDisplay(win, disp, dispB))
+}
+
+func TestModifierOnDisabledZoneDoesNothing(t *testing.T) {
+	f := &fakePlat{}
+	c := newCtl(f, func(s *Settings) { s.Snap.Zones[ZoneLeft] = ActionNone })
+	c.DragStart(DragWindow{ID: 1, Frame: Rect{}})
+	c.DragMove(Point{5, 450}, true)
+	if len(f.shown) != 0 {
+		t.Fatal("disabled zone must ignore the thirds modifier")
+	}
+	if _, _, apply := c.DragEnd(Point{5, 450}, true); apply {
+		t.Fatal("no apply on a disabled zone")
+	}
+}
+
+func TestDisplaysSnapshottedOncePerDrag(t *testing.T) {
+	f := &fakePlat{}
+	s := DefaultSettings()
+	calls := 0
+	c := NewSnapController(f, func() Settings { return s }, func() []Display { calls++; return []Display{disp} })
+	c.DragStart(DragWindow{ID: 1, Frame: Rect{}})
+	c.DragMove(Point{5, 450}, false)
+	c.DragMove(Point{6, 450}, false)
+	c.DragMove(Point{700, 450}, false)
+	c.DragEnd(Point{5, 450}, false)
+	if calls != 1 {
+		t.Fatalf("displays enumerated %d times, want once per drag", calls)
 	}
 }
 

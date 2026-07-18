@@ -25,13 +25,14 @@ type SnapController struct {
 	getSettings func() Settings
 	displays    func() []Display
 
-	dragging   bool
-	win        DragWindow
-	zone       Zone
-	zoneSince  int64
-	armed      bool
-	armedFrame Rect
-	history    map[uint32]snapRecord
+	dragging     bool
+	dragDisplays []Display // snapshot taken at DragStart; displays() is a cgo enumeration
+	win          DragWindow
+	zone         Zone
+	zoneSince    int64
+	armed        bool
+	armedFrame   Rect
+	history      map[uint32]snapRecord
 }
 
 func NewSnapController(p SnapPlatform, getSettings func() Settings, displays func() []Display) *SnapController {
@@ -46,6 +47,7 @@ func (c *SnapController) DragStart(w DragWindow) (Rect, bool) {
 		return Rect{}, false
 	}
 	c.dragging, c.win, c.zone, c.armed = true, w, "", false
+	c.dragDisplays = c.displays()
 	if rec, ok := c.history[w.ID]; ok {
 		if w.Frame.Eq(rec.snapped, 2.0) {
 			if s.Snap.RestorePreviousSize {
@@ -64,7 +66,7 @@ func (c *SnapController) DragStart(w DragWindow) (Rect, bool) {
 // resolve computes the target frame for the zone under the cursor, or ok=false.
 func (c *SnapController) resolve(cursor Point, modThirds bool) (Rect, bool) {
 	s := c.getSettings()
-	for _, d := range c.displays() {
+	for _, d := range c.dragDisplays {
 		zone, ok := ZoneAt(cursor, d, s.Snap.ZoneThickness)
 		if !ok {
 			continue
@@ -82,6 +84,15 @@ func (c *SnapController) resolve(cursor Point, modThirds bool) (Rect, bool) {
 			return ThirdColumn(0, d, s.General.WindowPadding), true
 		case ActionSnapThirdRight:
 			return ThirdColumn(2, d, s.General.WindowPadding), true
+		case ActionNextThird, ActionPrevThird:
+			return ThirdFrame(a, c.win.Frame, d, s.General.WindowPadding)
+		case ActionNextDisplay, ActionPrevDisplay:
+			di := DisplayOf(c.win.Frame, c.dragDisplays)
+			to := AdjacentDisplay(di, c.dragDisplays, a == ActionNextDisplay)
+			if to == di {
+				return Rect{}, false
+			}
+			return MapToDisplay(c.win.Frame, c.dragDisplays[di], c.dragDisplays[to]), true
 		default:
 			if f, ok := FrameFor(a, c.win.Frame, d, s.General.WindowPadding, s.General.PadFullscreen); ok {
 				return f, true
@@ -117,10 +128,17 @@ func (c *SnapController) DragEnd(cursor Point, modThirds bool) (uint32, Rect, bo
 		return 0, Rect{}, false
 	}
 	c.dragging = false
+	wasArmed := c.armed
 	if c.armed {
 		c.armed = false
 		c.plat.HideOverlay()
 	}
+	if !wasArmed {
+		// Never armed during this drag (e.g. a straight drop into a zone):
+		// applying here would snap on what the user perceives as a click.
+		return 0, Rect{}, false
+	}
+	// Re-resolve for the exact drop point so the applied frame matches it.
 	frame, ok := c.resolve(cursor, modThirds)
 	if !ok {
 		return 0, Rect{}, false

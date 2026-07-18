@@ -51,4 +51,11 @@ func TestSnapActionMapping(t *testing.T) {
 	if SnapAction(ZoneTopLeft, s, true) != ActionUpperLeft {
 		t.Fatal("modifier does not affect corners")
 	}
+	s.Zones[ZoneLeft] = ActionNone
+	if SnapAction(ZoneLeft, s, true) != ActionNone {
+		t.Fatal("modifier must not override an explicitly disabled zone")
+	}
+	if SnapAction(ZoneRight, s, true) != ActionSnapThirdRight {
+		t.Fatal("other enabled edges keep modifier thirds")
+	}
 }

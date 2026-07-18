@@ -59,7 +59,13 @@ func ZoneAt(p Point, d Display, thickness float64) (Zone, bool) {
 
 // SnapAction maps a zone to its configured action. With ⌥/⌘ held (modThirds),
 // plain left/right edges snap to thirds instead of their configured action.
+// A zone the user disabled (ActionNone, or missing from the map) stays
+// disabled regardless of the modifier.
 func SnapAction(zone Zone, s SnapSettings, modThirds bool) Action {
+	a, ok := s.Zones[zone]
+	if !ok || a == ActionNone {
+		return ActionNone
+	}
 	if modThirds {
 		switch zone {
 		case ZoneLeft:
@@ -67,10 +73,6 @@ func SnapAction(zone Zone, s SnapSettings, modThirds bool) Action {
 		case ZoneRight:
 			return ActionSnapThirdRight
 		}
-	}
-	a, ok := s.Zones[zone]
-	if !ok {
-		return ActionNone
 	}
 	return a
 }
