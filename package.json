@@ -1,0 +1,16 @@
+{
+  "name": "tiles-spliter",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*", "apps/desktop/frontend"],
+  "packageManager": "bun@1.2.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "turbo": "^2.5.0"
+  }
+}

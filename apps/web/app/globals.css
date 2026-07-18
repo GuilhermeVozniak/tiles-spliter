@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+@keyframes tile-left {
+  0%,
+  15% {
+    left: 6%;
+    top: 12%;
+    width: 40%;
+    height: 76%;
+  }
+  45%,
+  65% {
+    left: 4%;
+    top: 8%;
+    width: 44%;
+    height: 84%;
+  }
+  85%,
+  100% {
+    left: 6%;
+    top: 12%;
+    width: 40%;
+    height: 76%;
+  }
+}
+
+@keyframes tile-right {
+  0%,
+  15% {
+    left: 54%;
+    top: 30%;
+    width: 34%;
+    height: 40%;
+  }
+  45%,
+  65% {
+    left: 52%;
+    top: 8%;
+    width: 44%;
+    height: 84%;
+  }
+  85%,
+  100% {
+    left: 54%;
+    top: 30%;
+    width: 34%;
+    height: 40%;
+  }
+}
+
+.tile-demo-window-left {
+  animation: tile-left 6s ease-in-out infinite;
+}
+
+.tile-demo-window-right {
+  animation: tile-right 6s ease-in-out infinite;
+}
