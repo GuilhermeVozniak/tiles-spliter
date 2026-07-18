@@ -122,3 +122,44 @@
   gated). `scripts/release.sh` here is one atomic pipeline with signing and
   notarizing baked into the middle of it (no unsigned fallback exists), so
   the whole build/publish sequence is gated on `HAS_MACOS_SIGNING` instead.
+
+## Follow-up: review findings fixed (2026-07-18)
+
+Four review findings addressed, using drag-zone's `release.yml` keychain/
+signing section as reference:
+
+1. **Sign by hash with keychain pinned** — `release.yml`'s "Resolve codesign
+   identity" step now extracts the identity's SHA-1 hash (`awk '{print $2}'`
+   on `security find-identity` output, matching drag-zone) instead of the
+   quoted name, and exports both `CODESIGN_IDENTITY` (the hash) and a new
+   `CODESIGN_KEYCHAIN` (the temp keychain path) via `GITHUB_ENV`.
+   `scripts/release.sh` now builds the `codesign` invocation as an array and
+   appends `--keychain "$CODESIGN_KEYCHAIN"` only when that env var is set,
+   so local runs (unset) are unaffected.
+2. **Partition list** — `set-key-partition-list -S apple-tool:,apple:` →
+   `apple-tool:,apple:,codesign:`, matching drag-zone.
+3. **Turbo desktop test/build race** — added
+   `"@tiles-spliter/desktop#test": { "dependsOn": ["build"] }` to
+   `turbo.json`, mirroring the existing `@tiles-spliter/web#test` override,
+   so `go test` can't run concurrently with the frontend-mutating `wails`/Go
+   build.
+4. **actionlint in CI** — added a step to `ci.yml`'s `js` job (ubuntu-latest,
+   cheap) running actionlint via the pinned download-script approach,
+   copied verbatim from app-cleaner's `ci.yml` (installer pinned to tag
+   `v1.7.7`, tool pinned to `1.7.7`).
+
+### Verification
+- `actionlint -color .github/workflows/*.yml` — clean, exit 0 (brew-installed
+  1.7.12 locally; CI step pins its own 1.7.7 download independently).
+- `bash -n scripts/release.sh` — OK.
+- `./scripts/release.sh --dry-run` (CODESIGN_KEYCHAIN/CODESIGN_IDENTITY
+  unset) — builds frontend + arm64 binary, assembles
+  `dist/Tiles Spliter.app`, exits 0.
+- Root `bunx turbo run test lint build --continue` — 11/11 tasks green;
+  `desktop:build` ran to completion before `desktop:test` started.
+- `apps/desktop/frontend/dist/.gitkeep` was clobbered twice by local builds
+  during verification; restored both times with `git checkout --
+  apps/desktop/frontend/dist/.gitkeep` before committing.
+
+Files touched: `.github/workflows/release.yml`, `scripts/release.sh`,
+`turbo.json`, `.github/workflows/ci.yml`.

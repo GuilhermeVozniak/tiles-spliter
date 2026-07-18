@@ -27,6 +27,12 @@ jobs:
       - name: Test (web e2e runs here via its own "test" script)
         run: bunx turbo run test --filter=!@tiles-spliter/desktop
       - run: bunx turbo run build --filter=!@tiles-spliter/desktop
+      - name: Lint workflows (actionlint)
+        # Pin both the installer script (fetched from a release tag, not the
+        # mutable main branch) and the actionlint version it downloads.
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
 
   go:
     name: Desktop (Go) · build, vet, test

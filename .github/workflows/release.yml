@@ -80,7 +80,7 @@ jobs:
           curl -sSLo "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
           security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN"
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" login.keychain
           rm "$RUNNER_TEMP/cert.p12"
           # fail here, not at codesign, if the p12 lacks a Developer ID identity.
@@ -90,9 +90,12 @@ jobs:
         if: env.HAS_MACOS_SIGNING == 'true'
         run: |
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')
-          test -n "$IDENTITY"
-          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          # Sign by the identity's hash with --keychain pinned (name-based
+          # resolution reported "no identity found" on GitHub runners).
+          HASH=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/{print $2; exit}')
+          test -n "$HASH"
+          echo "CODESIGN_IDENTITY=$HASH" >> "$GITHUB_ENV"
+          echo "CODESIGN_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Build, sign, notarize, package (scripts/release.sh)
         if: env.HAS_MACOS_SIGNING == 'true'

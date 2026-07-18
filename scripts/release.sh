@@ -51,12 +51,16 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # 4. Sign (hardened runtime)
-# CODESIGN_IDENTITY may be a full identity name (e.g. resolved in CI from an
-# imported keychain identity) or a name already trusted in the default
-# keychain locally; codesign accepts either form.
-codesign --force --options runtime --timestamp \
-  --entitlements apps/desktop/build/entitlements.plist \
-  --sign "$CODESIGN_IDENTITY" "$APP"
+# CODESIGN_IDENTITY may be a full identity SHA-1 hash (resolved in CI for
+# keychain-pinned signing by hash) or a name already trusted in the default
+# keychain locally; codesign accepts either form. CODESIGN_KEYCHAIN pins the
+# keychain to search (name/hash resolution can otherwise miss the imported
+# identity on GitHub runners); unset locally, it's a no-op.
+CODESIGN_ARGS=(--force --options runtime --timestamp --entitlements apps/desktop/build/entitlements.plist)
+if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
+  CODESIGN_ARGS+=(--keychain "$CODESIGN_KEYCHAIN")
+fi
+codesign "${CODESIGN_ARGS[@]}" --sign "$CODESIGN_IDENTITY" "$APP"
 
 # 5. Notarize + staple
 ditto -c -k --keepParent "$APP" dist/notarize.zip
