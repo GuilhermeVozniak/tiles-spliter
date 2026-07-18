@@ -1,0 +1,111 @@
+name: Release
+
+# Cut a release by pushing a version tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# Builds a signed + notarized universal DMG named per @tiles-spliter/shared's
+# contract (tiles-spliter_<version>_darwin_universal.dmg). See docs/RELEASE.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # Gate the release on the full workspace suite (shared, desktop frontend,
+  # web, and the Go desktop app) plus a dedicated Go race-test pass, all on
+  # macos-14 since apps/desktop only compiles on Darwin.
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - run: bun install --frozen-lockfile
+      - name: Install Playwright Chromium (web e2e)
+        run: cd apps/web && bunx playwright install --with-deps chromium
+      - name: Full workspace gate (lint, test, build)
+        run: bunx turbo run test lint build --continue
+      - name: Go race tests
+        working-directory: apps/desktop
+        run: go test ./... -race
+
+  build-release:
+    needs: test
+    runs-on: macos-14
+    env:
+      # secrets are not readable in step-level `if:`; surface presence here.
+      HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - run: bun install --frozen-lockfile
+
+      - name: Derive version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp Info.plist version
+        run: |
+          PLIST=apps/desktop/build/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" "$PLIST"
+
+      # Signing is skipped when the signing secrets are absent (e.g. a tag
+      # pushed without repo secrets configured yet), so build-release simply
+      # does nothing rather than fail.
+      - name: Import signing certificate
+        if: env.HAS_MACOS_SIGNING == 'true'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Keychain Access p12 exports hold only the leaf cert + key; import
+          # Apple's Developer ID G2 intermediate too so the chain validates.
+          curl -sSLo "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm "$RUNNER_TEMP/cert.p12"
+          # fail here, not at codesign, if the p12 lacks a Developer ID identity.
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application"
+
+      - name: Resolve codesign identity
+        if: env.HAS_MACOS_SIGNING == 'true'
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')
+          test -n "$IDENTITY"
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize, package (scripts/release.sh)
+        if: env.HAS_MACOS_SIGNING == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./scripts/release.sh
+
+      - name: Publish GitHub Release
+        if: env.HAS_MACOS_SIGNING == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/tiles-spliter_*.dmg
+          generate_release_notes: true

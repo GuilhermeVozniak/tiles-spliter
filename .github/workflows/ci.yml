@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # apps/desktop is Go-only (Cocoa/Carbon APIs, macOS-only) and has no place
+  # in a Linux job's dependency graph, so this job filters it out and covers
+  # every other workspace: packages/shared, the desktop frontend, and the
+  # web landing page.
+  js:
+    name: JS · lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Install Playwright Chromium (web e2e)
+        run: cd apps/web && bunx playwright install --with-deps chromium
+      - run: bunx turbo run lint --filter=!@tiles-spliter/desktop
+      - name: Test (web e2e runs here via its own "test" script)
+        run: bunx turbo run test --filter=!@tiles-spliter/desktop
+      - run: bunx turbo run build --filter=!@tiles-spliter/desktop
+
+  go:
+    name: Desktop (Go) · build, vet, test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      # main.go does `//go:embed all:frontend/dist`; a fresh clone only has
+      # the tracked frontend/dist/.gitkeep, which satisfies the embed for
+      # `go vet`/`go test`, but a real `go build` needs the real bundle.
+      - name: Build desktop frontend (main.go embeds frontend/dist)
+        run: cd apps/desktop/frontend && bun run build
+      - name: go build / go vet / go test -race
+        working-directory: apps/desktop
+        run: go build ./... && go vet ./... && go test ./... -race
+      - name: Check gofmt
+        working-directory: apps/desktop
+        run: |
+          unformatted=$(gofmt -l . || true)
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi

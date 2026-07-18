@@ -1,0 +1,49 @@
+name: Deploy Web
+
+# Publishes apps/web to GitHub Pages under the project path
+# (https://<user>.github.io/tiles-spliter) on changes to the site or the
+# shared package. Since this isn't served from a custom domain, the build
+# sets NEXT_PUBLIC_BASE_PATH=/tiles-spliter so Next.js emits asset URLs
+# prefixed with the project path; see apps/web/next.config.ts.
+on:
+  push:
+    branches: [main]
+    paths: ["apps/web/**", "packages/shared/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Serialize deploys; never run two at once (avoids racing/duplicate artifacts).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build static site
+        env:
+          NEXT_PUBLIC_BASE_PATH: /tiles-spliter
+        run: cd apps/web && bun run build
+      - uses: actions/configure-pages@v5
+        with: { enablement: true }
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: apps/web/out }
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

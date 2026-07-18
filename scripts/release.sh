@@ -10,8 +10,13 @@ for arg in "$@"; do
   esac
 done
 
-VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/desktop/build/Info.plist)
+# Allow CI (or a manual override) to supply the version directly, e.g. from
+# the pushed tag; otherwise fall back to the value stamped in Info.plist.
+VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/desktop/build/Info.plist)}"
 APP="dist/Tiles Spliter.app"
+# House naming convention shared with the other vozniak.dev repos and with
+# @tiles-spliter/shared's releaseAssetName()/downloadUrl() contract.
+DMG_NAME="tiles-spliter_${VERSION}_darwin_universal.dmg"
 
 mkdir -p dist
 
@@ -46,6 +51,9 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # 4. Sign (hardened runtime)
+# CODESIGN_IDENTITY may be a full identity name (e.g. resolved in CI from an
+# imported keychain identity) or a name already trusted in the default
+# keychain locally; codesign accepts either form.
 codesign --force --options runtime --timestamp \
   --entitlements apps/desktop/build/entitlements.plist \
   --sign "$CODESIGN_IDENTITY" "$APP"
@@ -64,5 +72,5 @@ fi
 xcrun stapler staple "$APP"
 
 # 6. DMG
-hdiutil create -volname "Tiles Spliter" -srcfolder "$APP" -ov -format UDZO "dist/Tiles Spliter-$VERSION.dmg"
-echo "done: dist/Tiles Spliter-$VERSION.dmg"
+hdiutil create -volname "Tiles Spliter" -srcfolder "$APP" -ov -format UDZO "dist/$DMG_NAME"
+echo "done: dist/$DMG_NAME"

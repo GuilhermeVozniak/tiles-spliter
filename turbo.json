@@ -1,7 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "out/**", "bin/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "out/**", "bin/**"],
+      "env": ["NEXT_PUBLIC_BASE_PATH"]
+    },
     "test": { "dependsOn": ["^build"] },
     "lint": {},
     "dev": { "cache": false, "persistent": true },

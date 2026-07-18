@@ -61,6 +61,8 @@ Security → Accessibility before window actions will work.
 ## Release
 
 Releases are built and packaged with `scripts/release.sh` (universal binary,
-codesign, notarization, and DMG creation — see the script for required
-environment variables). Before cutting a release, run through the manual
-parity checklist in [docs/SMOKE.md](docs/SMOKE.md).
+codesign, notarization, and DMG creation) and published automatically by
+`.github/workflows/release.yml` on every `v*` tag push. See
+[docs/RELEASE.md](docs/RELEASE.md) for the full release process, required
+repository secrets, and the local fallback. Before cutting a release, run
+through the manual parity checklist in [docs/SMOKE.md](docs/SMOKE.md).
