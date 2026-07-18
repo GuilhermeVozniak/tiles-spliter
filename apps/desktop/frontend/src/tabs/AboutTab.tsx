@@ -10,7 +10,7 @@ type Props = {
 // Single source of truth for the displayed version. Kept as a local constant
 // (rather than importing package.json's own "version" field) so this file
 // stays self-contained — bump alongside apps/desktop/build/Info.plist.
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 const REPO_URL = "https://github.com/GuilhermeVozniak/tiles-spliter";
 
 export function AboutTab(_props: Props) {

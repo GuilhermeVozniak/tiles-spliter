@@ -48,12 +48,12 @@ const (
 	arrowOpacity = 0.62
 )
 
-// bgTop/bgBottom form a subtle vertical gradient across the zinc-950/zinc-900
-// brand background used throughout the app UI.
+// bgTop/bgBottom form a subtle light vertical gradient, matching the classic
+// bright Finder installer look (and drag-zone's light DMG background).
 var (
-	bgTop     = color.NRGBA{R: 11, G: 11, B: 14, A: 255}    // ~#0b0b0e, zinc-950
-	bgBottom  = color.NRGBA{R: 20, G: 20, B: 24, A: 255}    // ~#141418, zinc-900-ish
-	arrowGray = color.NRGBA{R: 148, G: 148, B: 158, A: 255} // mid-gray, echoes genmenuicons' #7f7f7f family
+	bgTop     = color.NRGBA{R: 249, G: 249, B: 251, A: 255} // ~#f9f9fb, near-white
+	bgBottom  = color.NRGBA{R: 231, G: 231, B: 237, A: 255} // ~#e7e7ed, light gray
+	arrowGray = color.NRGBA{R: 110, G: 110, B: 115, A: 255} // ~#6e6e73, reads clearly on light bg
 )
 
 type pt struct{ x, y float64 }

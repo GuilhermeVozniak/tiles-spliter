@@ -6,6 +6,10 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
+    version: "0.1.3",
+    note: "Light installer background for the DMG window.",
+  },
+  {
     version: "0.1.2",
     note: "Styled DMG installer with drag-to-Applications window.",
   },
