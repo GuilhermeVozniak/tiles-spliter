@@ -29,6 +29,7 @@ type Dispatcher struct {
 	undo        *engine.UndoStack
 	snap        *engine.SnapController
 	animate     func(w AppWindow, from, to engine.Rect)
+	runAsync    func(func()) // seam: tests run the drop handler synchronously
 
 	dragWin AppWindow // window picked up at mouse-down, nil otherwise
 }
@@ -51,6 +52,7 @@ func NewDispatcher(p Platform, getSettings func() engine.Settings) *Dispatcher {
 		enabled := getSettings().General.EnableAnimations
 		animateFrame(w, from, to, enabled)
 	}
+	d.runAsync = func(f func()) { go f() }
 	return d
 }
 
@@ -124,6 +126,11 @@ func (d *Dispatcher) OnDragEvent(kind int, x, y float64, modThirds bool) {
 			d.dragWin.Release()
 			d.dragWin = nil
 		}
+		// WindowAt is a blocking AX round-trip on the main run loop — skip it
+		// entirely when drag-snapping is disabled.
+		if !d.getSettings().Snap.Enabled {
+			return
+		}
 		w, err := d.plat.WindowAt(p)
 		if err != nil {
 			return
@@ -146,13 +153,20 @@ func (d *Dispatcher) OnDragEvent(kind int, x, y float64, modThirds bool) {
 		if d.dragWin == nil {
 			return
 		}
+		w := d.dragWin
+		d.dragWin = nil // cleared synchronously; the goroutine owns the ref now
 		if _, frame, apply := d.snap.DragEnd(p, modThirds); apply {
-			if cur, err := d.dragWin.Frame(); err == nil {
-				d.undo.Push(d.dragWin.WinID(), cur)
-				d.animate(d.dragWin, cur, frame)
+			if cur, err := w.Frame(); err == nil {
+				// The drop animation is ~130ms of AX calls + sleeps; it must not
+				// run inside the event-tap callback on the main run loop.
+				d.runAsync(func() {
+					d.undo.Push(w.WinID(), cur)
+					d.animate(w, cur, frame)
+					w.Release()
+				})
+				return
 			}
 		}
-		d.dragWin.Release()
-		d.dragWin = nil
+		w.Release()
 	}
 }

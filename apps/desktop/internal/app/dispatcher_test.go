@@ -35,6 +35,7 @@ func newTestDispatcher(w *fakeWin) (*Dispatcher, *fakePlatform) {
 	s := engine.DefaultSettings()
 	s.General.EnableAnimations = false
 	d := NewDispatcher(p, func() engine.Settings { return s })
+	d.runAsync = func(f func()) { f() } // deterministic drops in tests
 	return d, p
 }
 
