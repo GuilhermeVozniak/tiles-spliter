@@ -31,8 +31,9 @@ func goHotkeyFired(id C.uint) {
 	}
 }
 
-// InstallHotkeyHandler installs the Carbon event handler. Call once, from the
-// main thread, before any RegisterHotkey.
+// InstallHotkeyHandler installs the Carbon event handler before any
+// RegisterHotkey. Safe to call from any goroutine — the C side funnels the
+// Carbon calls to the main thread — and idempotent (install happens once).
 func InstallHotkeyHandler(fire func(id uint32)) {
 	hotkeyMu.Lock()
 	hotkeyFire = fire
@@ -51,13 +52,18 @@ func RegisterHotkey(id uint32, hk engine.Hotkey) error {
 	return nil
 }
 
+// UnregisterAllHotkeys drops every registration. hotkeyMu must NOT be held
+// across the C calls: they dispatch_sync to the main queue, and the main
+// thread's hotkey handler (goHotkeyFired) takes hotkeyMu — holding it here
+// while waiting on the main queue could deadlock.
 func UnregisterAllHotkeys() {
 	hotkeyMu.Lock()
-	defer hotkeyMu.Unlock()
-	for _, ref := range hotkeyRefs {
+	refs := hotkeyRefs
+	hotkeyRefs = nil
+	hotkeyMu.Unlock()
+	for _, ref := range refs {
 		C.ts_hk_unregister(ref)
 	}
-	hotkeyRefs = nil
 }
 
 // RunLoop blocks running the current thread's CFRunLoop (probe/testing only).

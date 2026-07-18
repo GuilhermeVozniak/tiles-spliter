@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,13 +31,23 @@ func (st *SettingsStore) Get() engine.Settings {
 	return st.s
 }
 
-func (st *SettingsStore) Set(s engine.Settings) error {
+// Swap atomically replaces the settings under a single write-lock: it reads
+// the previous value, installs next, and saves — no concurrent Swap can
+// interleave between the read and the write. Returns the previous value so
+// callers can diff old against next.
+func (st *SettingsStore) Swap(next engine.Settings) (old engine.Settings, err error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	st.s = s
-	// Save under the lock so concurrent Sets can't interleave writes to the
+	old = st.s
+	st.s = next
+	// Save under the lock so concurrent swaps can't interleave writes to the
 	// shared settings.json.tmp file.
-	return s.Save(st.path)
+	return old, next.Save(st.path)
+}
+
+func (st *SettingsStore) Set(s engine.Settings) error {
+	_, err := st.Swap(s)
+	return err
 }
 
 // SettingsService is bound to the frontend via Wails.
@@ -45,11 +56,21 @@ type SettingsService struct {
 	dispatcher     *Dispatcher
 	app            *application.App
 	prefs          *application.WebviewWindow
+	prefsFactory   func() *application.WebviewWindow // recreates prefs if destroyed
 	tray           *application.SystemTray
 	applyHotkeysFn func(engine.Settings) // seam: tests count hotkey re-registration
 
 	engineMu sync.Mutex
 	engineOn bool
+
+	// hotkeysMu serializes the entire unregister→install→register sequence in
+	// applyHotkeys so concurrent StartEngine/Update callers can't interleave
+	// and leave a partial hotkey set registered.
+	hotkeysMu sync.Mutex
+	// updateMu serializes Swap+applySideEffects in Update so concurrent
+	// updates always see consecutive (old, next) pairs — side effects can't
+	// be applied against a stale old snapshot.
+	updateMu sync.Mutex
 }
 
 func NewSettingsService(store *SettingsStore, d *Dispatcher) *SettingsService {
@@ -62,26 +83,67 @@ func (s *SettingsService) SetApp(a *application.App)                   { s.app =
 func (s *SettingsService) SetPrefsWindow(w *application.WebviewWindow) { s.prefs = w }
 func (s *SettingsService) SetTray(t *application.SystemTray)           { s.tray = t }
 
+// SetPrefsFactory wires a constructor used to (re)create the prefs window if
+// it is missing or was destroyed. Wails v3 alpha offers no hide-on-close
+// window option and no IsDestroyed probe (checked against
+// WebviewWindowOptions / WebviewWindow docs), so main.go cancels the close
+// event and hides instead — this factory is the defensive fallback.
+func (s *SettingsService) SetPrefsFactory(f func() *application.WebviewWindow) { s.prefsFactory = f }
+
 func (s *SettingsService) ShowPreferences() {
 	platform.ActivatePrefs()
-	s.prefs.Show()
-	s.prefs.Focus()
+	w := s.prefs
+	if w == nil && s.prefsFactory != nil {
+		w = s.prefsFactory()
+		s.prefs = w
+	}
+	if w == nil {
+		slog.Warn("ShowPreferences: no prefs window wired")
+		return
+	}
+	if !showWindow(w) && s.prefsFactory != nil {
+		// Window was destroyed under us (normally WindowClosing cancels the
+		// close and hides, so this is a last resort): recreate once.
+		w = s.prefsFactory()
+		s.prefs = w
+		showWindow(w)
+	}
 }
 
-// StartEngine registers hotkeys and the drag tap. Idempotent and safe for
-// concurrent callers (frontend AX polling can race the launch path).
+// showWindow shows+focuses w, recovering if the native window is gone — the
+// Wails API has no destroyed-check, so recover() is the only probe available.
+func showWindow(w *application.WebviewWindow) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Warn("prefs window Show/Focus panicked (window destroyed?)", "recover", r)
+			ok = false
+		}
+	}()
+	w.Show()
+	w.Focus()
+	return true
+}
+
+// StartEngine registers hotkeys first, then the drag tap. Idempotent and safe
+// for concurrent callers (frontend AX polling can race the launch path).
+// engineOn latches only on full success: if StartDragTap fails, hotkeys stay
+// registered but engineOn remains false so the next AXTrusted poll retries.
+// A retry re-runs applyHotkeys, which is idempotent under hotkeysMu — it
+// starts by unregistering everything — so partial-hotkeys-then-retry is safe.
 func (s *SettingsService) StartEngine() {
 	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
 	if s.engineOn {
-		s.engineMu.Unlock()
+		return
+	}
+	s.applyHotkeysFn(s.store.Get())
+	if err := platform.StartDragTap(func(kind platform.DragEventKind, x, y float64, mod bool) {
+		s.dispatcher.OnDragEvent(int(kind), x, y, mod)
+	}); err != nil {
+		slog.Error("engine: drag tap failed to start; will retry on next AX poll", "err", err)
 		return
 	}
 	s.engineOn = true
-	s.engineMu.Unlock()
-	s.applyHotkeysFn(s.store.Get())
-	_ = platform.StartDragTap(func(kind platform.DragEventKind, x, y float64, mod bool) {
-		s.dispatcher.OnDragEvent(int(kind), x, y, mod)
-	})
 }
 
 func (s *SettingsService) engineRunning() bool {
@@ -90,8 +152,9 @@ func (s *SettingsService) engineRunning() bool {
 	return s.engineOn
 }
 
-// Hotkey id == index into menuOrder(); undo uses undoHotkeyID.
-func menuOrder() []engine.Action {
+// MenuOrder is the canonical action order shared by the tray menu and hotkey
+// registration: hotkey id == index into MenuOrder(); undo uses undoHotkeyID.
+func MenuOrder() []engine.Action {
 	return []engine.Action{
 		engine.ActionCenter, engine.ActionFullscreen,
 		engine.ActionHalfLeft, engine.ActionHalfRight, engine.ActionHalfTop, engine.ActionHalfBottom,
@@ -105,6 +168,8 @@ func menuOrder() []engine.Action {
 const undoHotkeyID = 1000
 
 func (s *SettingsService) applyHotkeys(cfg engine.Settings) {
+	s.hotkeysMu.Lock()
+	defer s.hotkeysMu.Unlock()
 	platform.UnregisterAllHotkeys()
 	if !cfg.Hotkeys.Enabled {
 		return
@@ -114,19 +179,25 @@ func (s *SettingsService) applyHotkeys(cfg engine.Settings) {
 			s.dispatcher.Undo()
 			return
 		}
-		actions := menuOrder()
+		actions := MenuOrder()
 		if int(id) < len(actions) {
 			s.dispatcher.Perform(actions[id])
 		}
 	})
-	for i, a := range menuOrder() {
+	// Registration failures (e.g. combo already taken by another app) must not
+	// be silent: log each one. Surfacing them in the UI is a later ticket.
+	for i, a := range MenuOrder() {
 		if hk, ok := cfg.Hotkeys.Bindings[a]; ok {
-			_ = platform.RegisterHotkey(uint32(i), hk)
+			if err := platform.RegisterHotkey(uint32(i), hk); err != nil {
+				slog.Warn("hotkey registration failed", "action", a, "err", err)
+			}
 		}
 	}
 	// Undo binding (⌥⌘Y by default) is stored under a pseudo-action key "undo".
 	if hk, ok := cfg.Hotkeys.Bindings[engine.Action("undo")]; ok {
-		_ = platform.RegisterHotkey(undoHotkeyID, hk)
+		if err := platform.RegisterHotkey(undoHotkeyID, hk); err != nil {
+			slog.Warn("hotkey registration failed", "action", "undo", "err", err)
+		}
 	}
 }
 
@@ -135,8 +206,11 @@ func (s *SettingsService) applyHotkeys(cfg engine.Settings) {
 func (s *SettingsService) Get() engine.Settings { return s.store.Get() }
 
 func (s *SettingsService) Update(next engine.Settings) error {
-	old := s.store.Get()
-	if err := s.store.Set(next); err != nil {
+	next = engine.Clamp(next)
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+	old, err := s.store.Swap(next)
+	if err != nil {
 		return err
 	}
 	s.applySideEffects(old, next)
@@ -170,6 +244,25 @@ func (s *SettingsService) RequestAXPermission() bool {
 		s.StartEngine()
 	}
 	return ok
+}
+
+// ReconcileStartup re-applies settings whose state lives outside the process
+// (login item registration, tray visibility), so a settings file edited while
+// the app wasn't running — or drift in the login-item database — is corrected
+// at launch. Called from ApplicationDidFinishLaunching regardless of AX
+// permission.
+func (s *SettingsService) ReconcileStartup() {
+	cur := s.store.Get()
+	if err := platform.SetLoginItem(cur.General.LaunchAtLogin); err != nil {
+		slog.Warn("startup: login item reconcile failed", "err", err)
+	}
+	if s.tray != nil {
+		if cur.General.ShowMenuBarIcon {
+			s.tray.Show()
+		} else {
+			s.tray.Hide()
+		}
+	}
 }
 
 func (s *SettingsService) applySideEffects(old, next engine.Settings) {

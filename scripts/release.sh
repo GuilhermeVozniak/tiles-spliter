@@ -13,6 +13,8 @@ done
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/desktop/build/Info.plist)
 APP="dist/Tiles Spliter.app"
 
+mkdir -p dist
+
 # 1. Frontend
 (cd apps/desktop/frontend && bun install && bun run build)
 
@@ -50,7 +52,15 @@ codesign --force --options runtime --timestamp \
 
 # 5. Notarize + staple
 ditto -c -k --keepParent "$APP" dist/notarize.zip
-xcrun notarytool submit dist/notarize.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+if [ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]; then
+  # Preferred: credentials stored once via `xcrun notarytool store-credentials`
+  # keep the app-specific password out of argv/env.
+  xcrun notarytool submit dist/notarize.zip --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
+else
+  # Fallback: explicit Apple ID credentials. Consider switching to a keychain
+  # profile (set NOTARY_KEYCHAIN_PROFILE) so the password never hits argv.
+  xcrun notarytool submit dist/notarize.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+fi
 xcrun stapler staple "$APP"
 
 # 6. DMG

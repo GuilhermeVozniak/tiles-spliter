@@ -18,6 +18,30 @@ func TestAnimateDisabledSetsOnce(t *testing.T) {
 	}
 }
 
+type fastRecorder struct {
+	recorder
+	fastFrames []engine.Rect
+}
+
+func (r *fastRecorder) SetFrameFast(f engine.Rect) error {
+	r.fastFrames = append(r.fastFrames, f)
+	return nil
+}
+
+// A setter offering the fast path gets it for every intermediate step, while
+// the final step still uses the robust SetFrame and lands exactly on target.
+func TestAnimateUsesFastPathForIntermediateSteps(t *testing.T) {
+	r := &fastRecorder{}
+	to := engine.Rect{X: 100, Y: 200, W: 300, H: 400}
+	AnimateFrame(r, engine.Rect{}, to, true, func(int) {})
+	if len(r.fastFrames) != animSteps-1 {
+		t.Fatalf("want %d fast steps, got %d", animSteps-1, len(r.fastFrames))
+	}
+	if len(r.frames) != 1 || !r.frames[0].Eq(to, 0.001) {
+		t.Fatalf("final step must be a robust SetFrame at target, got %+v", r.frames)
+	}
+}
+
 func TestAnimateEnabledEndsExactlyAtTarget(t *testing.T) {
 	r := &recorder{}
 	to := engine.Rect{X: 100, Y: 200, W: 300, H: 400}

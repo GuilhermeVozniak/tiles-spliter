@@ -32,6 +32,10 @@ func (r realWindow) WinID() uint32 {
 }
 func (r realWindow) Frame() (engine.Rect, error)  { return r.w.Frame() }
 func (r realWindow) SetFrame(f engine.Rect) error { return r.w.SetFrame(f) }
+
+// SetFrameFast forwards platform.FastFrameSetter so AnimateFrame's
+// intermediate-step fast path reaches the real AX window.
+func (r realWindow) SetFrameFast(f engine.Rect) error { return r.w.SetFrameFast(f) }
 func (r realWindow) Release() {
 	if r.w != nil {
 		r.w.Release()

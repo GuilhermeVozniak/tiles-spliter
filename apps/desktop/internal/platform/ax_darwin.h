@@ -77,4 +77,18 @@ static bool ts_set_window_frame(AXUIElementRef win, double x, double y, double w
   return e1 == kAXErrorSuccess && e2 == kAXErrorSuccess && e3 == kAXErrorSuccess;
 }
 
+// Single size+position set (2 AX round-trips instead of 3). Meant for
+// intermediate animation frames, where the next step overwrites any drift
+// from min-size constraints; final placement should use ts_set_window_frame.
+static bool ts_set_window_frame_fast(AXUIElementRef win, double x, double y, double w, double h) {
+  CGPoint p = CGPointMake(x, y);
+  CGSize s = CGSizeMake(w, h);
+  AXValueRef posVal = AXValueCreate(kAXValueTypeCGPoint, &p);
+  AXValueRef sizeVal = AXValueCreate(kAXValueTypeCGSize, &s);
+  AXError e1 = AXUIElementSetAttributeValue(win, kAXSizeAttribute, sizeVal);
+  AXError e2 = AXUIElementSetAttributeValue(win, kAXPositionAttribute, posVal);
+  CFRelease(posVal); CFRelease(sizeVal);
+  return e1 == kAXErrorSuccess && e2 == kAXErrorSuccess;
+}
+
 static void ts_release(AXUIElementRef ref) { if (ref) CFRelease(ref); }

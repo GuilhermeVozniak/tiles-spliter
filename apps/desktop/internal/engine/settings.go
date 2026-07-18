@@ -104,26 +104,90 @@ func DefaultSettings() Settings {
 	}
 }
 
+// validZoneActions is every Action a snap zone may be configured with: the 17
+// layout actions plus ActionNone. The snap-third pseudo-actions are produced
+// transiently by the drag modifier and are never stored in settings.
+var validZoneActions = map[Action]bool{
+	ActionCenter: true, ActionFullscreen: true,
+	ActionHalfLeft: true, ActionHalfRight: true, ActionHalfTop: true, ActionHalfBottom: true,
+	ActionUpperLeft: true, ActionUpperRight: true, ActionLowerLeft: true, ActionLowerRight: true,
+	ActionNextThird: true, ActionPrevThird: true,
+	ActionTwoThirdsLeft: true, ActionTwoThirdsRight: true, ActionTwoThirdsCenter: true,
+	ActionNextDisplay: true, ActionPrevDisplay: true,
+	ActionNone: true,
+}
+
+func clampFloat(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// Clamp normalizes out-of-range or invalid settings values: numeric fields
+// are clamped to sane ranges (windowPadding [0,100], zoneThickness [1,100],
+// activationDelayMs [0,5000]), hotkey bindings with impossible key codes are
+// dropped (Carbon virtual key codes are 7-bit, so keyCode>127 is garbage),
+// and zones bound to unknown actions fall back to ActionNone. The binding and
+// zone maps are copied, so the input Settings is never mutated.
+func Clamp(s Settings) Settings {
+	s.General.WindowPadding = clampFloat(s.General.WindowPadding, 0, 100)
+	s.Snap.ZoneThickness = clampFloat(s.Snap.ZoneThickness, 1, 100)
+	s.Snap.ActivationDelayMs = clampInt(s.Snap.ActivationDelayMs, 0, 5000)
+	if s.Hotkeys.Bindings != nil {
+		bindings := make(map[Action]Hotkey, len(s.Hotkeys.Bindings))
+		for a, hk := range s.Hotkeys.Bindings {
+			if hk.KeyCode > 127 {
+				continue
+			}
+			bindings[a] = hk
+		}
+		s.Hotkeys.Bindings = bindings
+	}
+	if s.Snap.Zones != nil {
+		zones := make(map[Zone]Action, len(s.Snap.Zones))
+		for z, a := range s.Snap.Zones {
+			if !validZoneActions[a] {
+				a = ActionNone
+			}
+			zones[z] = a
+		}
+		s.Snap.Zones = zones
+	}
+	return s
+}
+
 // LoadSettings reads settings from path. Missing file → defaults. Corrupt
-// file → renamed to path+".bak" and defaults returned (never crash on bad input).
+// file → renamed to path+".bak" and defaults returned (never crash on bad
+// input). Partial files merge over defaults: json.Unmarshal is given a
+// fully-populated DefaultSettings value, so sections missing from the file
+// keep their defaults instead of collapsing to zero values — while explicit
+// values (including explicit `false`) still win because json only overwrites
+// fields that are actually present. The result is always Clamp-ed.
 func LoadSettings(path string) Settings {
+	s := DefaultSettings()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return DefaultSettings()
+		return s
 	}
-	var s Settings
 	if err := json.Unmarshal(data, &s); err != nil {
 		_ = os.Rename(path, path+".bak")
 		return DefaultSettings()
 	}
-	// Backfill zero-value maps from a partial file.
-	if s.Hotkeys.Bindings == nil {
-		s.Hotkeys.Bindings = DefaultSettings().Hotkeys.Bindings
-	}
-	if s.Snap.Zones == nil {
-		s.Snap.Zones = DefaultSettings().Snap.Zones
-	}
-	return s
+	return Clamp(s)
 }
 
 // Save writes settings atomically (tmp file + rename), creating parent dirs.

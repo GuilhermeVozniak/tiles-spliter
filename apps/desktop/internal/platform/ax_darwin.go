@@ -55,4 +55,13 @@ func (w *Window) SetFrame(r engine.Rect) error {
 	return nil
 }
 
+// SetFrameFast is the cheap two-call variant of SetFrame (no final size
+// re-set). Use for intermediate animation steps only; see FastFrameSetter.
+func (w *Window) SetFrameFast(r engine.Rect) error {
+	if !bool(C.ts_set_window_frame_fast(w.ref, C.double(r.X), C.double(r.Y), C.double(r.W), C.double(r.H))) {
+		return errors.New("platform: window rejected frame (not resizable?)")
+	}
+	return nil
+}
+
 func (w *Window) Release() { C.ts_release(w.ref); w.ref = 0 }

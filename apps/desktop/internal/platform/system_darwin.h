@@ -7,8 +7,9 @@ static const char *ts_login_item(bool enable) {
     NSError *err = nil;
     SMAppService *svc = [SMAppService mainAppService];
     BOOL ok = enable ? [svc registerAndReturnError:&err] : [svc unregisterAndReturnError:&err];
-    if (ok || !err) return NULL;
-    return strdup(err.localizedDescription.UTF8String);
+    // Success is ok==YES only: a NO with a nil error is still a failure.
+    if (ok) return NULL;
+    return strdup(err ? err.localizedDescription.UTF8String : "SMAppService returned NO with no error");
   }
   return strdup("macOS 13+ required");
 }

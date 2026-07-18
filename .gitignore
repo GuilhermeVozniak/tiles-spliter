@@ -1,5 +1,11 @@
 node_modules/
 dist/
+# Re-include the desktop frontend dist dir so its .gitkeep can be tracked:
+# `go build` needs frontend/dist to exist for //go:embed even without a
+# frontend build (fresh clone, go vet/test).
+!apps/desktop/frontend/dist/
+apps/desktop/frontend/dist/*
+!apps/desktop/frontend/dist/.gitkeep
 out/
 .next/
 .turbo/

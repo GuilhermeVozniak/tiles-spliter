@@ -1,10 +1,35 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
 )
+
+// Swap must return the pre-swap value and leave the store holding next.
+func TestSwapReturnsOldAtomically(t *testing.T) {
+	st := &SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")}
+	next := engine.DefaultSettings()
+	next.General.WindowPadding = 42
+	old, err := st.Swap(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.General.WindowPadding != 0 {
+		t.Fatalf("old must be the pre-swap value, got %+v", old.General)
+	}
+	if st.Get().General.WindowPadding != 42 {
+		t.Fatal("store must hold next after Swap")
+	}
+}
+
+// MenuOrder is the shared tray/hotkey ordering: exactly the 17 layout actions.
+func TestMenuOrderHas17Actions(t *testing.T) {
+	if got := len(MenuOrder()); got != 17 {
+		t.Fatalf("want 17 actions, got %d", got)
+	}
+}
 
 // A settings update that doesn't touch hotkey config must not re-register
 // hotkeys (Carbon churn on every slider tick), while a real hotkey change must.
