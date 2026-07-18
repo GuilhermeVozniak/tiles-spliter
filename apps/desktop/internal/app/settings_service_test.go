@@ -3,6 +3,7 @@ package app
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
 )
@@ -112,6 +113,69 @@ func TestResumeHotkeysNoopWhenEngineOff(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("ResumeHotkeys with engine off must not re-apply hotkeys, got %d", calls)
+	}
+}
+
+// SuspendHotkeys must arm a 60s watchdog; if the frontend never calls
+// ResumeHotkeys (e.g. the webview died mid-recording), the watchdog itself
+// must resume hotkeys so they don't stay suspended forever.
+func TestSuspendHotkeysWatchdogResumesOnTimeout(t *testing.T) {
+	s := &SettingsService{
+		store: &SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")},
+	}
+	var scheduledAfter time.Duration
+	var fired func()
+	s.afterFunc = func(d time.Duration, f func()) *time.Timer {
+		scheduledAfter = d
+		fired = f
+		return time.AfterFunc(time.Hour, func() {}) // never actually fires in the test
+	}
+
+	s.SuspendHotkeys()
+	if scheduledAfter != 60*time.Second {
+		t.Fatalf("want a 60s watchdog, got %v", scheduledAfter)
+	}
+	if s.suspendTimer == nil {
+		t.Fatal("SuspendHotkeys must store the watchdog timer")
+	}
+	if fired == nil {
+		t.Fatal("SuspendHotkeys must schedule the watchdog callback")
+	}
+
+	// Simulate the 60s timeout firing (rather than the frontend calling
+	// ResumeHotkeys) — it must resume hotkeys itself.
+	fired()
+	if s.hotkeysSuspended {
+		t.Fatal("watchdog firing must clear hotkeysSuspended")
+	}
+}
+
+// A fresh SuspendHotkeys call (e.g. recording a second binding) must reset
+// the watchdog rather than stack timers, and ResumeHotkeys must stop it so a
+// stale watchdog can't fire after a normal resume.
+func TestResumeHotkeysStopsWatchdog(t *testing.T) {
+	s := &SettingsService{
+		store: &SettingsStore{s: engine.DefaultSettings(), path: filepath.Join(t.TempDir(), "settings.json")},
+	}
+	calls := 0
+	s.afterFunc = func(d time.Duration, f func()) *time.Timer {
+		calls++
+		return time.AfterFunc(time.Hour, func() {})
+	}
+
+	s.SuspendHotkeys()
+	first := s.suspendTimer
+	s.SuspendHotkeys() // fresh suspend: must reset, not stack
+	if calls != 2 {
+		t.Fatalf("want afterFunc scheduled twice, got %d", calls)
+	}
+	if s.suspendTimer == first {
+		t.Fatal("a fresh Suspend must install a new watchdog timer")
+	}
+
+	s.ResumeHotkeys()
+	if s.suspendTimer != nil {
+		t.Fatal("ResumeHotkeys must clear the watchdog timer")
 	}
 }
 

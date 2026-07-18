@@ -29,7 +29,7 @@ function Spinner() {
 }
 
 export function App() {
-  const { settings, patch, replaceLocal } = useSettings();
+  const { settings, patch, replaceLocal, cancelPending } = useSettings();
   const [active, setActive] = useState<TabID>("general");
   // null = still checking, so we don't flash the onboarding card while the
   // very first axTrusted() call is in flight.
@@ -88,6 +88,7 @@ export function App() {
             settings={settings}
             patch={patch}
             replaceLocal={replaceLocal}
+            cancelPending={cancelPending}
           />
         ) : (
           <Spinner />

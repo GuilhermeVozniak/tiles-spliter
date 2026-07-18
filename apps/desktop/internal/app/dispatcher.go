@@ -3,6 +3,7 @@ package app
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
@@ -30,6 +31,15 @@ type Dispatcher struct {
 	snap        *engine.SnapController
 	animate     func(w AppWindow, from, to engine.Rect)
 	runAsync    func(func()) // seam: tests run the drop handler synchronously
+
+	// actionMu serializes Perform/Undo/drag-drop-apply so macOS key auto-repeat
+	// (a hotkey held down fires every ~30ms) can't overlap two ~150ms animation
+	// loops on the same window. Perform/Undo use TryLock and DROP an overlapping
+	// fire rather than queue it — auto-repeat should coalesce to "run once at a
+	// time", not build a backlog that keeps animating after the key is released.
+	// The drag-drop apply path takes a blocking Lock instead: a drop is a single
+	// user gesture and must never be silently dropped.
+	actionMu sync.Mutex
 
 	dragWin  AppWindow    // window resolved once a genuine drag starts, nil otherwise
 	dragDown bool         // mouse is down and we are watching for drag movement
@@ -66,7 +76,13 @@ func NewDispatcher(p Platform, getSettings func() engine.Settings) *Dispatcher {
 func (d *Dispatcher) Snap() *engine.SnapController { return d.snap }
 
 // Perform runs one of the 17 actions on the currently focused window.
+// Overlapping calls (macOS hotkey auto-repeat while held) are coalesced: a
+// call that arrives while another is still animating is dropped, not queued.
 func (d *Dispatcher) Perform(a engine.Action) {
+	if !d.actionMu.TryLock() {
+		return
+	}
+	defer d.actionMu.Unlock()
 	w, err := d.plat.FocusedWindow()
 	if err != nil {
 		slog.Warn("no focused window", "action", a, "err", err)
@@ -106,7 +122,13 @@ func (d *Dispatcher) Perform(a engine.Action) {
 	d.animate(w, cur, target)
 }
 
+// Undo shares actionMu with Perform: overlapping fires (e.g. undo hotkey
+// auto-repeat) are dropped rather than queued, same coalescing rule.
 func (d *Dispatcher) Undo() {
+	if !d.actionMu.TryLock() {
+		return
+	}
+	defer d.actionMu.Unlock()
 	w, err := d.plat.FocusedWindow()
 	if err != nil {
 		return
@@ -181,6 +203,11 @@ func (d *Dispatcher) OnDragEvent(kind int, x, y float64, modThirds bool) {
 				// The drop animation is ~130ms of AX calls + sleeps; it must not
 				// run inside the event-tap callback on the main run loop.
 				d.runAsync(func() {
+					// Blocking Lock (not TryLock): a drop is a single user
+					// gesture and must never be silently dropped just because a
+					// hotkey-driven Perform/Undo happens to be animating.
+					d.actionMu.Lock()
+					defer d.actionMu.Unlock()
 					d.undo.Push(w.WinID(), cur)
 					d.animate(w, cur, frame)
 					w.Release()

@@ -29,19 +29,32 @@ export function useSettings() {
       });
   }, []);
 
-  const schedulePersist = useCallback((next: Settings) => {
-    pending.current = next;
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      debounceTimer.current = null;
-      const toSend = pending.current;
-      pending.current = null;
-      if (!toSend) return;
-      persistChain.current = persistChain.current.then(() =>
-        updateSettings(toSend),
-      );
-    }, PERSIST_DEBOUNCE_MS);
+  // Appends a link to persistChain that always resolves (never rejects), so
+  // one failed updateSettings call can never permanently poison the chain —
+  // without this, every .then() appended after a rejection would be skipped
+  // forever and later edits would silently never persist.
+  const appendPersist = useCallback((toSend: Settings) => {
+    persistChain.current = persistChain.current.then(() =>
+      updateSettings(toSend).catch((err) => {
+        console.error("settings save failed", err);
+      }),
+    );
   }, []);
+
+  const schedulePersist = useCallback(
+    (next: Settings) => {
+      pending.current = next;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+        debounceTimer.current = null;
+        const toSend = pending.current;
+        pending.current = null;
+        if (!toSend) return;
+        appendPersist(toSend);
+      }, PERSIST_DEBOUNCE_MS);
+    },
+    [appendPersist],
+  );
 
   // Flush any pending debounced write immediately (e.g. on unmount) so a
   // trailing edit within the debounce window isn't silently dropped.
@@ -53,13 +66,23 @@ export function useSettings() {
     const toSend = pending.current;
     pending.current = null;
     if (toSend) {
-      persistChain.current = persistChain.current.then(() =>
-        updateSettings(toSend),
-      );
+      appendPersist(toSend);
     }
-  }, []);
+  }, [appendPersist]);
 
   useEffect(() => () => flush(), [flush]);
+
+  // Cancels a debounced write that hasn't fired yet (clears the timer and the
+  // pending value). For callers that are about to overwrite local state via
+  // replaceLocal (e.g. RestoreDefaultHotkeys) so a stale pending patch can't
+  // fire after the fact and clobber the freshly-restored value.
+  const cancelPending = useCallback(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    pending.current = null;
+  }, []);
 
   const patch = useCallback(
     (updater: (s: Settings) => Settings) => {
@@ -80,5 +103,5 @@ export function useSettings() {
     setSettings((cur) => (cur ? updater(cur) : cur));
   }, []);
 
-  return { settings, patch, replaceLocal };
+  return { settings, patch, replaceLocal, cancelPending };
 }

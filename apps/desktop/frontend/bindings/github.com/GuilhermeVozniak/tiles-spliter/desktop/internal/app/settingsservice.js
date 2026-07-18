@@ -57,6 +57,9 @@ export function RequestAXPermission() {
 }
 
 /**
+ * RestoreDefaultHotkeys holds updateMu across the whole Get→mutate→update
+ * sequence so a concurrent Update can't read the pre-restore settings,
+ * interleave, and clobber the restore (or vice versa).
  * @returns {$CancellablePromise<engine$0.Settings>}
  */
 export function RestoreDefaultHotkeys() {
@@ -67,7 +70,8 @@ export function RestoreDefaultHotkeys() {
 
 /**
  * ResumeHotkeys clears the suspend flag and, if the engine is running,
- * re-registers hotkeys from the current settings.
+ * re-registers hotkeys from the current settings. Also stops the watchdog
+ * timer started by SuspendHotkeys, if any.
  * @returns {$CancellablePromise<void>}
  */
 export function ResumeHotkeys() {

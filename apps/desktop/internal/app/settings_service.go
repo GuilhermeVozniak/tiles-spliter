@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/platform"
@@ -73,9 +74,19 @@ type SettingsService struct {
 	// Guarded by hotkeysMu; checked inside applyHotkeys so every caller of
 	// applyHotkeysFn (StartEngine, applySideEffects, ResumeHotkeys) honors it.
 	hotkeysSuspended bool
-	// updateMu serializes Swap+applySideEffects in Update so concurrent
+	// suspendTimer is the watchdog started by SuspendHotkeys: if the webview
+	// dies mid-recording (crash, force-quit) ResumeHotkeys is never called by
+	// the frontend and hotkeys would stay suspended forever. Guarded by
+	// hotkeysMu.
+	suspendTimer *time.Timer
+	// afterFunc is a seam over time.AfterFunc so tests can control the
+	// watchdog without sleeping 60s; defaults to time.AfterFunc.
+	afterFunc func(d time.Duration, f func()) *time.Timer
+	// updateMu serializes Swap+applySideEffects in Update (and the
+	// Get→mutate→Update sequence in RestoreDefaultHotkeys) so concurrent
 	// updates always see consecutive (old, next) pairs — side effects can't
-	// be applied against a stale old snapshot.
+	// be applied against a stale old snapshot, and a read-modify-write can't
+	// be interleaved by another Update.
 	updateMu sync.Mutex
 }
 
@@ -218,13 +229,28 @@ func (s *SettingsService) SuspendHotkeys() {
 	defer s.hotkeysMu.Unlock()
 	platform.UnregisterAllHotkeys()
 	s.hotkeysSuspended = true
+	if s.afterFunc == nil {
+		s.afterFunc = time.AfterFunc
+	}
+	// A fresh Suspend (e.g. the user starts recording a second binding before
+	// the first watchdog would have fired) resets the 60s window rather than
+	// stacking timers.
+	if s.suspendTimer != nil {
+		s.suspendTimer.Stop()
+	}
+	s.suspendTimer = s.afterFunc(60*time.Second, s.ResumeHotkeys)
 }
 
 // ResumeHotkeys clears the suspend flag and, if the engine is running,
-// re-registers hotkeys from the current settings.
+// re-registers hotkeys from the current settings. Also stops the watchdog
+// timer started by SuspendHotkeys, if any.
 func (s *SettingsService) ResumeHotkeys() {
 	s.hotkeysMu.Lock()
 	s.hotkeysSuspended = false
+	if s.suspendTimer != nil {
+		s.suspendTimer.Stop()
+		s.suspendTimer = nil
+	}
 	s.hotkeysMu.Unlock()
 	if s.engineRunning() {
 		s.applyHotkeysFn(s.store.Get())
@@ -236,9 +262,16 @@ func (s *SettingsService) ResumeHotkeys() {
 func (s *SettingsService) Get() engine.Settings { return s.store.Get() }
 
 func (s *SettingsService) Update(next engine.Settings) error {
-	next = engine.Clamp(next)
 	s.updateMu.Lock()
 	defer s.updateMu.Unlock()
+	return s.updateLocked(next)
+}
+
+// updateLocked performs Clamp+Swap+side-effects. Callers must hold updateMu
+// — it exists so RestoreDefaultHotkeys can hold updateMu across its whole
+// Get→mutate→update sequence without re-entrantly deadlocking on Update.
+func (s *SettingsService) updateLocked(next engine.Settings) error {
+	next = engine.Clamp(next)
 	old, err := s.store.Swap(next)
 	if err != nil {
 		return err
@@ -251,10 +284,15 @@ func (s *SettingsService) Update(next engine.Settings) error {
 	return nil
 }
 
+// RestoreDefaultHotkeys holds updateMu across the whole Get→mutate→update
+// sequence so a concurrent Update can't read the pre-restore settings,
+// interleave, and clobber the restore (or vice versa).
 func (s *SettingsService) RestoreDefaultHotkeys() engine.Settings {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
 	cur := s.store.Get()
 	cur.Hotkeys = engine.DefaultSettings().Hotkeys
-	_ = s.Update(cur)
+	_ = s.updateLocked(cur)
 	return cur
 }
 

@@ -2,7 +2,9 @@ package app
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
 )
@@ -165,6 +167,51 @@ func TestRestoreAppliesOnDragStartNotMouseDown(t *testing.T) {
 		t.Fatalf("restore uses the pre-snap size, got %+v", last)
 	}
 	d.OnDragEvent(2, 110, 450, false)
+}
+
+// Two Perform calls racing (macOS hotkey auto-repeat while the previous fire
+// is still mid-animation) must coalesce: the second is dropped, not queued,
+// so exactly one action applies and exactly one undo entry is recorded.
+func TestPerformConcurrentCallsAreCoalesced(t *testing.T) {
+	orig := engine.Rect{X: 100, Y: 100, W: 400, H: 300}
+	w := &fakeWin{id: 1, frame: orig}
+	d, _ := newTestDispatcher(w)
+
+	// Channel-gated fake: the first caller to acquire actionMu blocks here
+	// until the test releases it, giving a concurrent second call a window
+	// to either overlap (bug) or bounce off TryLock (fix).
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 2)
+	d.animate = func(win AppWindow, from, to engine.Rect) {
+		entered <- struct{}{}
+		<-gate
+		_ = win.SetFrame(to)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); d.Perform(engine.ActionFullscreen) }()
+	go func() { defer wg.Done(); d.Perform(engine.ActionFullscreen) }()
+
+	<-entered // exactly one goroutine should get past TryLock into animate
+	select {
+	case <-entered:
+		t.Fatal("a second Perform entered animate concurrently — actions were not serialized")
+	case <-time.After(75 * time.Millisecond):
+		// expected: the second call bounced off TryLock and returned already
+	}
+	close(gate)
+	wg.Wait()
+
+	if len(w.sets) != 1 {
+		t.Fatalf("want exactly one applied action, got %d", len(w.sets))
+	}
+	if _, ok := d.undo.Pop(w.id); !ok {
+		t.Fatal("want one undo entry")
+	}
+	if _, ok := d.undo.Pop(w.id); ok {
+		t.Fatal("want exactly one undo entry, found a second")
+	}
 }
 
 func TestUndoKeepsRecordOnFrameError(t *testing.T) {

@@ -14,7 +14,34 @@ type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
   replaceLocal: (u: (s: Settings) => Settings) => void;
+  cancelPending: () => void;
 };
+
+// Module-level queue (same pattern as useSettings' persistChain): switching
+// the recording row fast enough fires the outgoing row's cleanup
+// (resumeHotkeys) and the incoming row's effect (suspendHotkeys) as two
+// unordered async calls — without a queue, resume could land after suspend
+// and leave hotkeys unregistered while nothing is recording. Chaining every
+// call through one promise forces the Go-side suspend/resume bridge calls to
+// execute in the order they were issued, and a rejected link still lets the
+// chain continue (mirrors persistChain's poisoning fix).
+let hotkeyBridgeChain: Promise<void> = Promise.resolve();
+
+function queueSuspendHotkeys() {
+  hotkeyBridgeChain = hotkeyBridgeChain.then(() =>
+    suspendHotkeys().catch((err) => {
+      console.error(err);
+    }),
+  );
+}
+
+function queueResumeHotkeys() {
+  hotkeyBridgeChain = hotkeyBridgeChain.then(() =>
+    resumeHotkeys().catch((err) => {
+      console.error(err);
+    }),
+  );
+}
 
 type BindingKey = Action | "undo";
 
@@ -100,7 +127,12 @@ function HotkeyButton({
   );
 }
 
-export function HotkeysTab({ settings, patch, replaceLocal }: Props) {
+export function HotkeysTab({
+  settings,
+  patch,
+  replaceLocal,
+  cancelPending,
+}: Props) {
   const [recording, setRecording] = useState<BindingKey | null>(null);
   const [conflict, setConflict] = useState<BindingKey | null>(null);
   const bindings = settings.hotkeys.bindings;
@@ -118,9 +150,9 @@ export function HotkeysTab({ settings, patch, replaceLocal }: Props) {
   // window blur (also routed through stopRecording), and unmount.
   useEffect(() => {
     if (!recording) return;
-    suspendHotkeys().catch(console.error);
+    queueSuspendHotkeys();
     return () => {
-      resumeHotkeys().catch(console.error);
+      queueResumeHotkeys();
     };
   }, [recording]);
 
@@ -226,6 +258,10 @@ export function HotkeysTab({ settings, patch, replaceLocal }: Props) {
           type="button"
           onClick={async () => {
             const restored = await restoreDefaultHotkeys();
+            // A debounced patch queued just before the click could otherwise
+            // fire after replaceLocal and clobber the freshly-restored
+            // bindings with a stale snapshot.
+            cancelPending();
             // Go already persisted the restored hotkeys; merge just that
             // section into local state so we don't clobber other in-flight
             // edits (general/snap) with a second, redundant persist.

@@ -5,6 +5,7 @@ type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
   replaceLocal: (u: (s: Settings) => Settings) => void;
+  cancelPending: () => void;
 };
 
 export function GeneralTab({ settings, patch }: Props) {

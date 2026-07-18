@@ -6,6 +6,7 @@ type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
   replaceLocal: (u: (s: Settings) => Settings) => void;
+  cancelPending: () => void;
 };
 
 const ZONE_POS: Record<ZoneID, string> = {

@@ -4,6 +4,7 @@ type Props = {
   settings: Settings;
   patch: (u: (s: Settings) => Settings) => void;
   replaceLocal: (u: (s: Settings) => Settings) => void;
+  cancelPending: () => void;
 };
 
 // Single source of truth for the displayed version. Kept as a local constant

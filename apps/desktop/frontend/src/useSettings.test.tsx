@@ -77,6 +77,51 @@ describe("useSettings", () => {
     errSpy.mockRestore();
   });
 
+  it("a failed persist does not poison the chain — a later edit still persists", async () => {
+    const update = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce(undefined);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setApiForTests({
+      getSettings: async () => structuredClone(DEFAULT_SETTINGS),
+      updateSettings: update,
+    });
+    const { result } = renderHook(() => useSettings());
+    await flushMicrotasks();
+
+    act(() => {
+      result.current.patch((s) => ({
+        ...s,
+        general: { ...s.general, windowPadding: 4 },
+      }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    await flushMicrotasks();
+
+    expect(update).toHaveBeenCalledTimes(1);
+
+    // A second, later edit must still persist even though the first write
+    // rejected — a poisoned chain would silently skip every .then() after
+    // the rejection and this call would never fire.
+    act(() => {
+      result.current.patch((s) => ({
+        ...s,
+        general: { ...s.general, windowPadding: 8 },
+      }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    await flushMicrotasks();
+
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(update.mock.calls[1][0].general.windowPadding).toBe(8);
+    errSpy.mockRestore();
+  });
+
   it("replaceLocal updates state without persisting", async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     setApiForTests({
