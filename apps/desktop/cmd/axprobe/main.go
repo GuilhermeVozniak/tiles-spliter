@@ -49,5 +49,11 @@ func main() {
 		}
 		fmt.Println("press ⌥⌘C (ctrl-c to quit)")
 		platform.RunLoop()
+	case "drag":
+		err := platform.StartDragTap(func(kind platform.DragEventKind, x, y float64, mod bool) {
+			fmt.Printf("drag kind=%d x=%.0f y=%.0f mod=%v\n", kind, x, y, mod)
+		})
+		fmt.Println("tap started, err:", err, "— drag any window (ctrl-c to quit)")
+		platform.RunLoop()
 	}
 }
