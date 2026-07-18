@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+.next/
+.turbo/
+bin/
+apps/desktop/frontend/bindings/
+apps/desktop/build/darwin/Tiles Spliter.app
+*.dmg
+.DS_Store
