@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/engine"
 	"github.com/GuilhermeVozniak/tiles-spliter/desktop/internal/platform"
@@ -54,6 +55,13 @@ func main() {
 			fmt.Printf("drag kind=%d x=%.0f y=%.0f mod=%v\n", kind, x, y, mod)
 		})
 		fmt.Println("tap started, err:", err, "— drag any window (ctrl-c to quit)")
+		platform.RunLoop()
+	case "overlay":
+		d := platform.Displays()[0]
+		half, _ := engine.FrameFor(engine.ActionHalfLeft, engine.Rect{}, d, 0, false)
+		platform.ShowOverlay(half)
+		fmt.Println("overlay on left half for 3s")
+		go func() { time.Sleep(3 * time.Second); platform.HideOverlay(); time.Sleep(time.Second); os.Exit(0) }()
 		platform.RunLoop()
 	}
 }
