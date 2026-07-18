@@ -33,4 +33,16 @@ describe("keyEventToHotkey", () => {
     expect(keyEventToHotkey(ev("MetaLeft", { metaKey: true }))).toBeNull();
     expect(keyEventToHotkey(ev("KeyC", {}))).toBeNull();
   });
+  it("rejects shift-only combos (would swallow capital letters system-wide)", () => {
+    expect(keyEventToHotkey(ev("KeyY", { shiftKey: true }))).toBeNull();
+    expect(keyEventToHotkey(ev("ArrowLeft", { shiftKey: true }))).toBeNull();
+  });
+  it("accepts shift combined with another modifier", () => {
+    expect(
+      keyEventToHotkey(ev("KeyY", { shiftKey: true, metaKey: true })),
+    ).toEqual({ keyCode: 16, modifiers: 512 + 256 });
+    expect(
+      keyEventToHotkey(ev("KeyY", { shiftKey: true, altKey: true })),
+    ).toEqual({ keyCode: 16, modifiers: 512 + 2048 });
+  });
 });

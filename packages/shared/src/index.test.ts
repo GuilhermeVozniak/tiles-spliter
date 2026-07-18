@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ACTION_LABELS,
   ACTIONS,
+  actionLabel,
+  CODE_TO_CARBON,
   DEFAULT_SETTINGS,
   HOTKEY_DISPLAY,
   ZONES,
@@ -39,7 +41,28 @@ describe("shared defaults", () => {
   it("formats hotkeys for display", () => {
     expect(HOTKEY_DISPLAY({ keyCode: 8, modifiers: 256 + 2048 })).toBe("⌥⌘C");
   });
+  it("formats a recorded ⌥⌘O hotkey (regression: keyCode 31 used to show as #31)", () => {
+    expect(HOTKEY_DISPLAY({ keyCode: 31, modifiers: 2304 })).toBe("⌥⌘O");
+  });
+  it("has a display name for every capturable key code", () => {
+    for (const code of Object.values(CODE_TO_CARBON)) {
+      const label = HOTKEY_DISPLAY({ keyCode: code, modifiers: 256 });
+      expect(label).not.toContain("#");
+    }
+  });
   it("labels every action", () => {
     for (const a of ACTIONS) expect(ACTION_LABELS[a]).toBeTruthy();
+  });
+});
+
+describe("actionLabel", () => {
+  it("labels every real action the same as ACTION_LABELS", () => {
+    for (const a of ACTIONS) expect(actionLabel(a)).toBe(ACTION_LABELS[a]);
+  });
+  it('labels the "undo" pseudo-action', () => {
+    expect(actionLabel("undo")).toBe("Undo");
+  });
+  it("falls back to a title-cased rendering for unknown keys", () => {
+    expect(actionLabel("some-unknown-action")).toBe("Some Unknown Action");
   });
 });

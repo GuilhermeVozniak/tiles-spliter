@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { axTrusted } from "./api";
 import { Onboarding } from "./Onboarding";
 import { AboutTab } from "./tabs/AboutTab";
@@ -47,6 +47,10 @@ export function App() {
   const activeTab = TABS.find((t) => t.id === active) ?? TABS[0];
   const ActiveComponent = activeTab.Component;
 
+  // Stable identity so Onboarding's poll interval isn't torn down and
+  // restarted on every App re-render.
+  const handleGranted = useCallback(() => setTrusted(true), []);
+
   if (trusted === null) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 text-zinc-100">
@@ -54,7 +58,7 @@ export function App() {
       </div>
     );
   }
-  if (!trusted) return <Onboarding onGranted={() => setTrusted(true)} />;
+  if (!trusted) return <Onboarding onGranted={handleGranted} />;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100">
