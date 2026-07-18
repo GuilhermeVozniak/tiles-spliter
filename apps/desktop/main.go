@@ -15,6 +15,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/tray-icon.png
+var trayIconBytes []byte
+
 // Menu order mirrors the original Tiles tray menu.
 var menuActions = []engine.Action{
 	engine.ActionCenter, engine.ActionFullscreen,
@@ -87,7 +90,7 @@ func main() {
 	menu.Add("About Tiles Spliter").OnClick(func(*application.Context) { svc.ShowPreferences() })
 	menu.Add("Quit Tiles Spliter").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { wailsApp.Quit() })
 	tray.SetMenu(menu)
-	tray.SetLabel("◧") // placeholder glyph; replaced by template icon in Task 23
+	tray.SetTemplateIcon(trayIconBytes)
 	svc.SetTray(tray)
 
 	// --- Engine wiring (only once AX permission exists) ---
