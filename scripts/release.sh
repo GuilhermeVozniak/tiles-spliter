@@ -62,19 +62,32 @@ if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
 fi
 codesign "${CODESIGN_ARGS[@]}" --sign "$CODESIGN_IDENTITY" "$APP"
 
-# 5. Notarize + staple
-ditto -c -k --keepParent "$APP" dist/notarize.zip
+# 5. DMG (styled drag-to-Applications window; see apps/desktop/build/dmg/appdmg.json).
+# appdmg.json's content path is resolved relative to the json file itself
+# (not this script's cwd), so it reaches into dist/ via a fixed "../../../.."
+# regardless of where this script is invoked from.
+npx --yes appdmg apps/desktop/build/dmg/appdmg.json "dist/$DMG_NAME"
+
+# 6. Sign, notarize, staple the DMG.
+# House order (matches app-cleaner/drag-zone's release.yml): the .app is
+# signed above so appdmg can package a signed bundle, then the *DMG itself*
+# is signed, notarized and stapled — notarizing the raw appdmg output
+# directly is rejected because it carries no signature of its own.
+DMG_SIGN_ARGS=(--force --timestamp)
+if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
+  DMG_SIGN_ARGS+=(--keychain "$CODESIGN_KEYCHAIN")
+fi
+codesign "${DMG_SIGN_ARGS[@]}" --sign "$CODESIGN_IDENTITY" "dist/$DMG_NAME"
+
 if [ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]; then
   # Preferred: credentials stored once via `xcrun notarytool store-credentials`
   # keep the app-specific password out of argv/env.
-  xcrun notarytool submit dist/notarize.zip --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
+  xcrun notarytool submit "dist/$DMG_NAME" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
 else
   # Fallback: explicit Apple ID credentials. Consider switching to a keychain
   # profile (set NOTARY_KEYCHAIN_PROFILE) so the password never hits argv.
-  xcrun notarytool submit dist/notarize.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+  xcrun notarytool submit "dist/$DMG_NAME" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
 fi
-xcrun stapler staple "$APP"
+xcrun stapler staple "dist/$DMG_NAME"
 
-# 6. DMG
-hdiutil create -volname "Tiles Spliter" -srcfolder "$APP" -ov -format UDZO "dist/$DMG_NAME"
 echo "done: dist/$DMG_NAME"

@@ -26,6 +26,13 @@ var trayIconBytes []byte
 //go:embed all:build/menu-icons
 var menuIconsFS embed.FS
 
+// DMG installer background (drag-to-Applications window). Regenerate the
+// PNGs after changing cmd/gendmgbg with `go generate .`, then rebuild
+// build/dmg/bg.tiff per the tiffutil command documented in that package.
+// Not embedded: consumed directly by appdmg via build/dmg/appdmg.json.
+//
+//go:generate go run ./cmd/gendmgbg
+
 var actionLabels = map[engine.Action]string{
 	engine.ActionCenter: "Center", engine.ActionFullscreen: "Fullscreen",
 	engine.ActionHalfLeft: "Half Left", engine.ActionHalfRight: "Half Right",
