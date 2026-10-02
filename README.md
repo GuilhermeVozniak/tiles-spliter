@@ -4,6 +4,16 @@ A macOS window-tiling utility. This monorepo contains the desktop application
 (Go + Wails v3), the marketing site (Next.js), and shared TypeScript
 libraries that power the Tiles Spliter ecosystem.
 
+## Install
+
+```sh
+brew install --cask GuilhermeVozniak/tap/tiles-spliter
+```
+
+Or grab the DMG from the
+[latest release](https://github.com/GuilhermeVozniak/tiles-spliter/releases/latest).
+Requires macOS 13 (Ventura) or newer.
+
 ## Quick Start
 
 ```bash
