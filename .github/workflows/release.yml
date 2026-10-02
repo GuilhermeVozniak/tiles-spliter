@@ -3,7 +3,8 @@ name: Release
 # Cut a release by pushing a version tag, e.g.:
 #   git tag v0.1.0 && git push origin v0.1.0
 # Builds a signed + notarized universal DMG named per @tiles-spliter/shared's
-# contract (tiles-spliter_<version>_darwin_universal.dmg). See docs/RELEASE.md.
+# contract (tiles-spliter_<version>_darwin_universal.dmg), then points the
+# Homebrew tap at it. See docs/RELEASE.md.
 on:
   push:
     tags: ["v*"]
@@ -40,6 +41,11 @@ jobs:
     env:
       # secrets are not readable in step-level `if:`; surface presence here.
       HAS_MACOS_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
+    # Consumed by bump-homebrew-cask. dmg_sha256 stays empty when signing is
+    # skipped, which is how that job knows no DMG was published.
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      dmg_sha256: ${{ steps.checksum.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -106,9 +112,68 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: ./scripts/release.sh
 
+      - name: Checksum DMG (for the Homebrew cask bump)
+        id: checksum
+        if: env.HAS_MACOS_SIGNING == 'true'
+        run: echo "sha256=$(shasum -a 256 dist/tiles-spliter_*.dmg | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub Release
         if: env.HAS_MACOS_SIGNING == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/tiles-spliter_*.dmg
           generate_release_notes: true
+
+  # Point the Homebrew tap (GuilhermeVozniak/homebrew-tap) at the DMG that was
+  # just published so `brew install --cask GuilhermeVozniak/tap/tiles-spliter`
+  # resolves to the new version. Runs only when build-release actually shipped
+  # a DMG. Pushing to the tap needs HOMEBREW_TAP_TOKEN (docs/RELEASE.md);
+  # without it the cask is still audited but the push is skipped with a warning.
+  bump-homebrew-cask:
+    name: Bump Homebrew cask
+    needs: build-release
+    if: needs.build-release.outputs.dmg_sha256 != ''
+    runs-on: macos-14
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+      TAP: guilhermevozniak/tap
+      VERSION: ${{ needs.build-release.outputs.version }}
+      SHA256: ${{ needs.build-release.outputs.dmg_sha256 }}
+    steps:
+      - name: Tap guilhermevozniak/tap
+        run: brew tap "$TAP"
+
+      - name: Rewrite version and sha256 in Casks/tiles-spliter.rb
+        run: |
+          CASK="$(brew --repository "$TAP")/Casks/tiles-spliter.rb"
+          sed -i '' -E "s|^  version \".*\"$|  version \"$VERSION\"|" "$CASK"
+          sed -i '' -E "s|^  sha256 \".*\"$|  sha256 \"$SHA256\"|" "$CASK"
+          grep -q "^  version \"$VERSION\"" "$CASK"
+          grep -q "^  sha256 \"$SHA256\"" "$CASK"
+          git -C "$(dirname "$CASK")" --no-pager diff
+
+      # `brew fetch` downloads the DMG from the release and verifies sha256
+      # against it, so a wrong asset name or checksum fails here, not on users.
+      - name: Audit and fetch the updated cask
+        run: |
+          brew audit --cask "$TAP/tiles-spliter"
+          brew fetch --cask "$TAP/tiles-spliter"
+
+      - name: Push to the tap
+        if: env.HAS_TAP_TOKEN == 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          cd "$(brew --repository "$TAP")"
+          if git diff --quiet; then echo "cask already at $VERSION; nothing to push"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "tiles-spliter $VERSION"
+          git push "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/GuilhermeVozniak/homebrew-tap.git" HEAD:main
+
+      - name: Warn that the tap was not bumped
+        if: env.HAS_TAP_TOKEN != 'true'
+        run: echo "::warning::HOMEBREW_TAP_TOKEN is not set; homebrew-tap was not bumped to $VERSION. Add the secret (docs/RELEASE.md) or edit Casks/tiles-spliter.rb by hand."

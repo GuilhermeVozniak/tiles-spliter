@@ -14,7 +14,9 @@ drive this:
   gates on the full test suite (`bunx turbo run test lint build --continue`
   plus a dedicated `go test -race`), then builds a universal binary, signs
   it with the Developer ID + hardened runtime, packages a DMG, notarizes and
-  staples it, and attaches it to a GitHub Release.
+  staples it, and attaches it to a GitHub Release. A final
+  `bump-homebrew-cask` job then points the Homebrew tap at the new DMG (see
+  [Homebrew tap](#homebrew-tap)).
 
 ## One-time setup
 
@@ -64,6 +66,7 @@ Repo › Settings › Secrets and variables › Actions → add:
 | `APPLE_ID` | your Apple ID email |
 | `APPLE_TEAM_ID` | your 10-character Team ID |
 | `APPLE_APP_PASSWORD` | the app-specific password (`xxxx-xxxx-xxxx-xxxx`) |
+| `HOMEBREW_TAP_TOKEN` | fine-grained PAT, **Contents: read/write** on `homebrew-tap` only (see [Homebrew tap](#homebrew-tap)) |
 
 The CI keychain password is generated per-run; no keychain secret is
 needed. The codesign identity is resolved from the imported certificate at
@@ -87,7 +90,42 @@ leading `v`) is stamped into `apps/desktop/build/Info.plist`
 asset: `tiles-spliter_<version>_darwin_universal.dmg` — the same contract
 `@tiles-spliter/shared`'s `releaseAssetName()`/`downloadUrl()` use to build
 the landing page's download links. Watch the run under the repo's Actions
-tab; on success a Release with the notarized DMG appears.
+tab; on success a Release with the notarized DMG appears, followed by a
+commit on the Homebrew tap so `brew upgrade` picks the version up.
+
+## Homebrew tap
+
+Users install with:
+
+```sh
+brew install --cask GuilhermeVozniak/tap/tiles-spliter
+```
+
+The cask lives in <https://github.com/GuilhermeVozniak/homebrew-tap>
+(`Casks/tiles-spliter.rb`) and pins one `version` plus the DMG's `sha256`.
+`release.yml`'s `bump-homebrew-cask` job rewrites both after every published
+release, runs `brew audit` and `brew fetch` on the result (so the checksum is
+verified against the real asset), and pushes to the tap's `main`. Pushing to
+another repository is beyond the default `GITHUB_TOKEN`, hence the extra
+secret:
+
+1. GitHub › Settings › Developer settings › Personal access tokens ›
+   Fine-grained tokens → Generate new token.
+2. Repository access: **Only select repositories** → `homebrew-tap`.
+   Permissions: **Contents → Read and write**. Nothing else.
+3. Save it as the `HOMEBREW_TAP_TOKEN` secret on *this* repository.
+
+Without the secret the job still audits the cask but skips the push and
+emits a warning on the run. Bump by hand in that case:
+
+```sh
+brew tap GuilhermeVozniak/tap
+cd "$(brew --repository guilhermevozniak/tap)"
+# edit Casks/tiles-spliter.rb: version, and sha256 from `shasum -a 256 <dmg>`
+brew audit --cask guilhermevozniak/tap/tiles-spliter
+brew fetch --cask guilhermevozniak/tap/tiles-spliter
+git commit -am "tiles-spliter <version>" && git push
+```
 
 ## Local release fallback
 
